@@ -1,4 +1,5 @@
 # Copyright 2025 TAKKT Industrial & Packaging GmbH
+# Copyright 2026 Pit Kleyersburg <pitkley@googlemail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,7 +35,8 @@ import re
 import unicodedata
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, Any, Protocol, override
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Literal, Protocol, override
 
 if TYPE_CHECKING:
     from .app import Watchpost
@@ -119,6 +121,14 @@ class HostnameContext:
         )
 
 
+class _NoPiggybackHostType(Enum):
+    NO_PIGGYBACK_HOST = object()
+
+
+NO_PIGGYBACK_HOST = _NoPiggybackHostType.NO_PIGGYBACK_HOST
+NoPiggybackHost = Literal[_NoPiggybackHostType.NO_PIGGYBACK_HOST]
+
+
 class HostnameStrategy(Protocol):
     """
     Strategy protocol for resolving a hostname from a `HostnameContext`.
@@ -128,7 +138,7 @@ class HostnameStrategy(Protocol):
     hostname.
     """
 
-    def resolve(self, ctx: HostnameContext) -> str | None: ...
+    def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None: ...
 
 
 class StaticHostnameStrategy(HostnameStrategy):
@@ -144,7 +154,7 @@ class StaticHostnameStrategy(HostnameStrategy):
         self.hostname = hostname
 
     @override
-    def resolve(self, ctx: HostnameContext) -> str | None:
+    def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
         return self.hostname
 
 
@@ -161,11 +171,11 @@ class FunctionStrategy(HostnameStrategy):
             or `None`.
     """
 
-    def __init__(self, fn: Callable[[HostnameContext], str | None]):
+    def __init__(self, fn: Callable[[HostnameContext], str | NoPiggybackHost | None]):
         self.fn = fn
 
     @override
-    def resolve(self, ctx: HostnameContext) -> str | None:
+    def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
         return self.fn(ctx)
 
 
@@ -186,7 +196,7 @@ class TemplateStrategy(HostnameStrategy):
         self.template = template
 
     @override
-    def resolve(self, ctx: HostnameContext) -> str | None:
+    def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
         return self.template.format(**asdict(ctx))
 
 
@@ -203,12 +213,28 @@ class CompositeStrategy(HostnameStrategy):
         self.strategies = strategies
 
     @override
-    def resolve(self, ctx: HostnameContext) -> str | None:
+    def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
         for s in self.strategies:
             val = s.resolve(ctx)
             if val:
                 return val
         return None
+
+
+class NoPiggybackHostStrategy(HostnameStrategy):
+    """
+    Explicitly disables the setting of a piggyback hostname. Whatever results a
+    check has created will be associated with the host the Watchpost application
+    ran on.
+
+    Compared to simply providing an empty string, using this strategy will never
+    result in either a fallback hostname being generated or a
+    `HostnameResolutionError` to be raised.
+    """
+
+    @override
+    def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
+        return NO_PIGGYBACK_HOST
 
 
 LABEL_MAX = 63
@@ -261,7 +287,7 @@ _multi_dot_re = re.compile(r"\.+")
 _multi_dash_re = re.compile(r"-+")
 
 
-def coerce_to_rfc1123(value: str) -> str:
+def coerce_to_rfc1123(value: str | NoPiggybackHost) -> str:
     """
     Normalize and coerce an arbitrary string into an RFC1123-compatible
     hostname.
@@ -284,6 +310,8 @@ def coerce_to_rfc1123(value: str) -> str:
             If the input is empty or cannot be transformed into a valid
             hostname.
     """
+    if value is NO_PIGGYBACK_HOST:
+        return ""
     if not value:
         raise ValueError("Cannot coerce empty hostname")
 
@@ -342,7 +370,7 @@ class CoercingStrategy(HostnameStrategy):
         self.inner = inner
 
     @override
-    def resolve(self, ctx: HostnameContext) -> str | None:
+    def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
         val = self.inner.resolve(ctx)
         return None if val is None else coerce_to_rfc1123(val)
 
@@ -450,7 +478,7 @@ def resolve_hostname(
     )
 
     # Determine candidate in precedence order
-    candidate: str | None = None
+    candidate: str | NoPiggybackHost | None = None
 
     # 1) Per-result override
     if result and result.hostname:
@@ -461,7 +489,7 @@ def resolve_hostname(
         if check.hostname_strategy:
             try:
                 val = check.hostname_strategy.resolve(ctx)
-                if isinstance(val, str) and val:
+                if val is NO_PIGGYBACK_HOST or (isinstance(val, str) and val):
                     candidate = val
             except Exception as e:
                 raise HostnameResolutionError(
@@ -472,7 +500,7 @@ def resolve_hostname(
         if candidate is None and environment.hostname_strategy:
             try:
                 val = environment.hostname_strategy.resolve(ctx)
-                if isinstance(val, str) and val:
+                if val is NO_PIGGYBACK_HOST or (isinstance(val, str) and val):
                     candidate = val
             except Exception as e:
                 raise HostnameResolutionError(
@@ -483,12 +511,18 @@ def resolve_hostname(
         if candidate is None and watchpost.hostname_strategy:
             try:
                 val = watchpost.hostname_strategy.resolve(ctx)
-                if isinstance(val, str) and val:
+                if val is NO_PIGGYBACK_HOST or (isinstance(val, str) and val):
                     candidate = val
             except Exception as e:
                 raise HostnameResolutionError(
                     f"Hostname strategy failed at watchpost level for {check.service_name}/{environment.name}: {e}"
                 ) from e
+
+    if candidate is NO_PIGGYBACK_HOST:
+        # If it was explicitly requested to disable piggybacking, return an
+        # empty string to associate the check output with the host Watchpost is
+        # running on.
+        return ""
 
     if candidate is None and fallback_to_default_hostname_generation:
         candidate = f"{check.service_name}-{environment.name}"
