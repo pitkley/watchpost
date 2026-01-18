@@ -8,7 +8,7 @@ It helps you configure checks through a simple function decorator, handles runni
 Install Watchpost in your project:
 
 ```shell
-pip install 'git+https://github.com/takkt-ag/watchpost[cli]'
+pip install 'git+https://github.com/pitkley/watchpost[cli]'
 ```
 
 You can now write a basic Watchpost application like this:
@@ -126,3 +126,7 @@ To set up the hooks, run `uv run lefthook install`.
 
 This project has no official affiliation with Checkmk GmbH or any of its affiliates.
 "Checkmk" is a trademark of Checkmk GmbH.
+
+## History
+
+This project is a fork of [takkt-ag/watchpost](https://github.com/takkt-ag/watchpost).

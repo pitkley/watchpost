@@ -109,7 +109,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ghcr.io/takkt-ag/watchpost/checkmk
+        images: ghcr.io/pitkley/watchpost/checkmk
         tags: |
           type=raw,value=latest
           type=raw,value=${{ env.CHECKMK_VERSION }}

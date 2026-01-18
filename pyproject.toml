@@ -5,8 +5,7 @@ description = "Code driven monitoring checks for Checkmk"
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
-    { name = "Pit Kleyersburg", email = "pit.kleyersburg@takkt.com" },
-    { name = "TAKKT Industrial & Packaging GmbH", email = "webshop-devops@kaiserkraft-europa.de" },
+    { name = "Pit Kleyersburg", email = "pitkley@googlemail.com" },
 ]
 requires-python = ">=3.13"
 dependencies = [

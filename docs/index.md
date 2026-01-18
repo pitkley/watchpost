@@ -13,7 +13,7 @@ Affiliation: This project has no official affiliation with Checkmk GmbH or any o
 Install Watchpost in your project:
 
 ```shell
-pip install 'git+https://github.com/takkt-ag/watchpost[cli]'
+pip install 'git+https://github.com/pitkley/watchpost[cli]'
 ```
 
 You can now write a basic Watchpost application like this:
