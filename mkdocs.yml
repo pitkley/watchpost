@@ -1,10 +1,11 @@
 site_name: "Watchpost"
 
 nav:
-- Home:
+- Introduction:
   - Overview: index.md
-  - Quickstart: home/quickstart.md
-- API reference: reference/api.md
+  - Concepts: concepts.md
+  - Getting Started: getting-started.md
+- API Reference: reference/api.md
 
 theme:
   name: "material"

@@ -111,5 +111,6 @@ INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 
 ## Next steps
 
-* Try the [quickstart guide](home/quickstart.md).
-* See the [full API reference](reference/api.md).
+* Learn the [core concepts](concepts.md) behind Watchpost.
+* Follow the [getting started guide](getting-started.md) to build your first check.
+* Explore the [full API reference](reference/api.md).
