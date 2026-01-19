@@ -32,6 +32,10 @@ do
     # Skip vendored files, they will be checked separately
     continue
   fi
+  if [[ "$file" == docs/.hooks/hide_lines.py ]]; then
+    # Skip vendored files, they will be checked separately
+    continue
+  fi
 
   if ! grep -qE "${PATTERN_COPYRIGHT}" "$file"; then
     echo "$file: missing/malformed copyright-notice"
@@ -62,6 +66,7 @@ done < <(\
   git ls-files -z -- \
     'src/watchpost/vendored/*.py' \
     'src/watchpost/vendored/*.sh' \
+    'docs/.hooks/hide_lines.py' \
 )
 
 if [[ "$ERRORS" -gt 0 ]]; then

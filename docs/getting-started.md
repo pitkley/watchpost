@@ -4,25 +4,26 @@ This guide walks you through creating your first Watchpost application and runni
 
 This guide uses the [uv package manager](https://docs.astral.sh/uv/) for commands and examples.
 You can use pip or another tool if you prefer.
-If you need to install uv, see the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+If you want to use uv (recommended) and you need to install it, see the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
 
-## Installation
+## Installation in an existing project
 
 Install Watchpost in your project:
-
-```bash
-pip install 'watchpost[cli]'
-```
-
-Or with uv:
 
 ```bash
 uv add 'watchpost[cli]'
 ```
 
-We recommend installing Watchpost with the `cli` extra. It adds a `watchpost` command that makes it easy to list and run checks during development.
+Or with plain pip:
 
-## Project Setup
+```bash
+pip install 'watchpost[cli]'
+```
+
+We recommend installing Watchpost with the `cli` extra.
+It adds a `watchpost` command that makes it easy to list and run checks during development.
+
+## Project setup for a new project
 
 Let's build a complete example that monitors whether example.com is reachable.
 
@@ -81,7 +82,7 @@ The `execution_environment` tells Watchpost where this application instance is r
 ### 4. Verify the app starts
 
 ```console
-$ uv run watchpost --app my_watchpost:app list-checks  # (1)
+$ uv run watchpost --app my_watchpost:app list-checks
 $ uv run watchpost --app my_watchpost:app run-checks
             Check Execution Results
 ┏━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━┓
@@ -90,7 +91,7 @@ $ uv run watchpost --app my_watchpost:app run-checks
 └───────┴─────────────┴──────────────┴─────────┘
 ```
 
-1. There is no output because the application does not define any checks yet.
+There is no output yet for either list-checks or for run-checks because the application does not define any checks yet.
 
 ### 5. Add an HTTP client dependency
 
@@ -114,14 +115,13 @@ Installed 5 packages in 28ms
 
 Edit `my-watchpost/src/my_watchpost/__init__.py` to add a datasource that provides HTTP clients:
 
-```python hl_lines="1-2 4 7-13"
+```python hl_lines="1 2-3 6-12 21"
 from contextlib import asynccontextmanager
 
 import httpx
-
 from watchpost import Datasource, EnvironmentRegistry, Watchpost
 
-class HttpxClientFactory(Datasource):  # (1)
+class HttpxClient(Datasource):  # (1)
     scheduling_strategies = ()
 
     @asynccontextmanager
@@ -136,18 +136,20 @@ app = Watchpost(
     checks=[],
     execution_environment=PRODUCTION,
 )
-app.register_datasource(HttpxClientFactory)  # (3)
+app.register_datasource(HttpxClient)  # (3)
 ```
 
 1. Datasources inherit from `Datasource` base class. The `scheduling_strategies` tuple can contain strategies that control where this datasource can run (we'll leave it empty for now).
 2. This async context manager provides a configured HTTP client to checks. Using a datasource instead of creating the client directly inside checks makes your code more testable and reusable.
 3. Register the datasource with the application so Watchpost can inject it into checks.
 
+You can see that we created a new class inheriting from `Datasource` that we have then registered with our application, which makes it available for dependency injection into the check that we will now write!
+
 ### 7. Create a check
 
 Now add a check that verifies example.com returns HTTP 200:
 
-```py title="Illustrative example" hl_lines="6 15-28 33"
+```python title="Illustrative example" hl_lines="17-39 43"
 from contextlib import asynccontextmanager
 
 import httpx
@@ -161,7 +163,18 @@ from watchpost import (
     Watchpost,
 )
 
-# ... (HttpxClientFactory class here)
+# ... (HttpxClient class here)
+class HttpxClient(Datasource): #! hidden
+    scheduling_strategies = () #! hidden
+#! hidden
+    @asynccontextmanager #! hidden
+    async def client(self): #! hidden
+        async with httpx.AsyncClient() as client: #! hidden
+            yield client #! hidden
+# ... (ENVIRONMENTS and PRODUCTION here)
+ENVIRONMENTS = EnvironmentRegistry() #! hidden
+PRODUCTION = ENVIRONMENTS.new("production") #! hidden
+
 @check(  # (1)
     name="example.com HTTP status",
     service_labels={},
@@ -169,9 +182,9 @@ from watchpost import (
     cache_for="5m",
 )
 async def example_com_http_status(
-    client_factory: HttpxClientFactory,  # (2)
+    client: HttpxClient,  # (2)
 ):
-    async with client_factory.client() as client:
+    async with client.client() as client:
         response = await client.get("https://www.example.com")
 
     if response.status_code != 200:
@@ -186,15 +199,14 @@ async def example_com_http_status(
 
     return ok("example.com is up")  # (4)
 
-# ... (ENVIRONMENTS and PRODUCTION here)
-
 app = Watchpost(
     checks=[
         example_com_http_status,  # (5)
     ],
     execution_environment=PRODUCTION,
 )
-app.register_datasource(HttpxClientFactory)
+app.register_datasource(HttpxClient)
+_ = list(app.run_checks()) # run the app to make sure it works #! hidden
 ```
 
 1. The `@check` decorator defines a monitoring check with:
@@ -217,7 +229,7 @@ Run your check using the `watchpost` CLI:
 
 ```console
 $ uv run watchpost --app my_watchpost:app list-checks
-my_watchpost.example_com_http_status(client_factory: my_watchpost.HttpxClientFactory)
+my_watchpost.example_com_http_status(client: my_watchpost.HttpxClient)
 
 $ uv run watchpost --app my_watchpost:app run-checks
                        Check Execution Results
@@ -254,15 +266,15 @@ The Checkmk integration retrieves check results via HTTP. Watchpost is a valid A
 Install uvicorn:
 
 ```bash
-pip install uvicorn
+uv add --group deploy uvicorn
 # or
-uv add --dev uvicorn
+pip install uvicorn
 ```
 
 Run your application:
 
 ```console
-$ uvicorn my_watchpost:app
+$ uv run --group deploy uvicorn my_watchpost:app
 INFO:     Started server process [12345]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
@@ -275,14 +287,7 @@ Access the root endpoint to see Checkmk-compatible output:
 curl http://127.0.0.1:8000/
 ```
 
-The response is in [Checkmk piggyback format](https://docs.checkmk.com/latest/en/piggyback.html):
-
-```
-<<<<production-example.com HTTP status>>>>
-<<<local:sep(0)>>>
-0 example.com HTTP status - example.com is up
-<<<<>>>>
-```
+The response is in [Checkmk piggyback format](https://docs.checkmk.com/latest/en/piggyback.html) making use of our custom Watchpost plugin.
 
 ### HTTP Endpoints
 
@@ -299,7 +304,7 @@ To integrate your Watchpost application with Checkmk, you need to configure Chec
 
 The integration details depend on your Checkmk setup. See the [Checkmk Integration guide](deployment/checkmk-integration.md) for detailed instructions on:
 
-- Installing the Watchpost special agent for Checkmk
+- Installing the Watchpost plugin for Checkmk
 - Configuring Checkmk to poll your Watchpost application
 - Service discovery and labeling
 - Troubleshooting common issues

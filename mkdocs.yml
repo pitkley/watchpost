@@ -1,5 +1,8 @@
 site_name: "Watchpost"
 
+hooks:
+- docs/.hooks/hide_lines.py
+
 nav:
 - Introduction:
   - Overview: index.md
