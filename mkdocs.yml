@@ -8,6 +8,11 @@ nav:
   - Overview: index.md
   - Concepts: concepts.md
   - Getting Started: getting-started.md
+- Fundamentals:
+  - Environments: fundamentals/environments.md
+  - Datasources: fundamentals/datasources.md
+  - Checks: fundamentals/checks.md
+  - Results: fundamentals/results.md
 - API Reference: reference/api.md
 
 theme:
