@@ -155,27 +155,6 @@ result = ok(
 3. Metrics that become Checkmk performance data.
 4. Override the hostname for this specific result.
 
-## CheckResult Dataclass
-
-For more control, create `CheckResult` objects directly:
-
-```python title="Illustrative example"
-from watchpost.result import CheckResult, CheckState, Metric
-
-result = CheckResult(
-    check_state=CheckState.OK,
-    summary="All systems operational",
-    details="Last checked at 14:30 UTC",
-    name_suffix=None,
-    metrics=[
-        Metric(name="uptime_hours", value=720),
-    ],
-    hostname=None,
-)
-```
-
-This is equivalent to using the helper functions but gives you access to all fields.
-
 ## OngoingCheckResult Builder
 
 When a check validates multiple aspects but returns a single result, use the builder pattern:
@@ -291,9 +270,46 @@ def multi_check():
 
 ## Returning Multiple Results
 
-A single check can produce multiple Checkmk services by returning multiple results.
+A single check can produce multiple Checkmk services by returning multiple results. Using generators (with `yield`) is the recommended approach as it produces clearer, more readable code.
+
+### Using a Generator
+
+Use `yield` to produce multiple results from a single check:
+
+```python title="Illustrative example"
+from watchpost import check, ok, warn
+from watchpost import Environment #! hidden
+PROD = Environment("prod") #! hidden
+
+@check(
+    name="Endpoint Status",
+    service_labels={},
+    environments=[PROD],
+    cache_for="5m",
+)
+def multi_endpoint_check():
+    endpoints = {
+        "/api/users": 200,
+        "/api/orders": 200,
+        "/api/products": 503,
+    }
+
+    for endpoint, status in endpoints.items():
+        if status == 200:
+            yield ok(f"Status {status}", name_suffix=f" {endpoint}")
+        else:
+            yield warn(f"Status {status}", name_suffix=f" {endpoint}")
+```
+
+This creates three services:
+
+- "Endpoint Status /api/users"
+- "Endpoint Status /api/orders"
+- "Endpoint Status /api/products"
 
 ### Using a List
+
+Alternatively, you can return a list of results:
 
 ```python title="Illustrative example"
 from watchpost import check, ok, warn
@@ -320,39 +336,8 @@ def multi_endpoint_check():
         else:
             results.append(warn(f"Status {status}", name_suffix=f" {endpoint}"))
 
-    return results  # (1)
+    return results
 ```
-
-1. Creates three services:
-   - "Endpoint Status /api/users"
-   - "Endpoint Status /api/orders"
-   - "Endpoint Status /api/products"
-
-### Using a Generator
-
-For large result sets or lazy evaluation, use a generator:
-
-```python title="Illustrative example" { "validate": false }
-from watchpost import check, ok, warn
-
-@check(
-    name="Container Status",
-    service_labels={},
-    environments=[PROD],
-    cache_for="5m",
-)
-def container_check():
-    containers = ["web-1", "web-2", "worker-1", "worker-2"]
-
-    for container in containers:
-        status = get_container_status(container)  # (1)
-        if status == "running":
-            yield ok(f"Running", name_suffix=f" {container}")
-        else:
-            yield warn(f"Status: {status}", name_suffix=f" {container}")
-```
-
-1. Each container is checked as results are yielded.
 
 ## name_suffix for Multiple Services
 
@@ -370,23 +355,19 @@ PROD = Environment("prod") #! hidden
     cache_for="5m",
 )
 def database_checks():
-    results = []
-
     # Check 1: Connection pool
     pool_usage = 45
     if pool_usage > 90:
-        results.append(crit(f"Pool at {pool_usage}%", name_suffix=" Connection Pool"))
+        yield crit(f"Pool at {pool_usage}%", name_suffix=" Connection Pool")
     else:
-        results.append(ok(f"Pool at {pool_usage}%", name_suffix=" Connection Pool"))
+        yield ok(f"Pool at {pool_usage}%", name_suffix=" Connection Pool")
 
     # Check 2: Replication lag
     lag_seconds = 2
     if lag_seconds > 10:
-        results.append(warn(f"Lag: {lag_seconds}s", name_suffix=" Replication"))
+        yield warn(f"Lag: {lag_seconds}s", name_suffix=" Replication")
     else:
-        results.append(ok(f"Lag: {lag_seconds}s", name_suffix=" Replication"))
-
-    return results
+        yield ok(f"Lag: {lag_seconds}s", name_suffix=" Replication")
 ```
 
 This creates two Checkmk services:

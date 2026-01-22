@@ -1,6 +1,6 @@
 # Environments
 
-Environments are a core concept in Watchpost that represent logical contexts in which checks run. Understanding how to define and work with environments is essential for building effective monitoring solutions.
+Environments are a core concept in Watchpost that represent logical contexts in which checks run and against which checks run. Understanding how to define and work with environments is essential for building effective monitoring solutions.
 
 ## The Environment Class
 

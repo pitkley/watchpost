@@ -1,6 +1,6 @@
 # Datasources
 
-Datasources encapsulate external dependencies that your checks need to access. They provide a clean abstraction layer between your monitoring logic and the systems you're monitoring, making checks more testable and reusable.
+Datasources encapsulate external dependencies that your checks need to access. They provide a clean abstraction layer between your monitoring logic and the systems you're monitoring, while also encapsulating compatibility requirements such as scheduling strategies that control where checks using this datasource can run.
 
 ## The Datasource Base Class
 
@@ -22,82 +22,6 @@ class ApiDatasource(Datasource):
 ```
 
 1. The `scheduling_strategies` attribute is required. Use an empty tuple `()` for no constraints, or specify strategies that control where checks using this datasource can run. See [Scheduling Strategies](../advanced/scheduling-strategies.md).
-
-### Synchronous vs Asynchronous Methods
-
-Datasources can provide both sync and async methods. Choose based on your check's needs:
-
-```python title="Illustrative example"
-import httpx
-
-from watchpost import Datasource
-
-
-class ApiDatasource(Datasource):
-    scheduling_strategies = ()
-
-    def __init__(self, base_url: str):
-        self.base_url = base_url
-
-    # Synchronous method
-    def get_health_sync(self) -> dict:
-        response = httpx.get(f"{self.base_url}/health")
-        return response.json()
-
-    # Asynchronous method
-    async def get_health_async(self) -> dict:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.base_url}/health")
-            return response.json()
-```
-
-### Async Context Managers
-
-For resources that need cleanup (like HTTP clients with connection pools), use async context managers:
-
-```python title="Illustrative example"
-from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
-
-import httpx
-
-from watchpost import Datasource
-
-
-class HttpClientDatasource(Datasource):
-    scheduling_strategies = ()
-
-    def __init__(self, base_url: str):
-        self.base_url = base_url
-
-    @asynccontextmanager
-    async def client(self) -> AsyncIterator[httpx.AsyncClient]:
-        async with httpx.AsyncClient(base_url=self.base_url) as client:
-            yield client
-```
-
-Checks use this pattern with `async with`:
-
-```python title="Illustrative example"
-from watchpost import check, ok
-from watchpost import Environment, Datasource #! hidden
-PROD = Environment("prod") #! hidden
-class HttpClientDatasource(Datasource): #! hidden
-    scheduling_strategies = () #! hidden
-
-@check(
-    name="API Health",
-    service_labels={},
-    environments=[PROD],
-    cache_for="5m",
-)
-async def api_health_check(http: HttpClientDatasource):
-    async with http.client() as client:
-        response = await client.get("/health")
-        if response.status_code == 200:
-            return ok("API is healthy")
-        ...
-```
 
 ## Registering Datasources
 
@@ -350,11 +274,26 @@ app.register_datasource_factory(ApiFactory)
 
 ### Combined Datasource and Factory
 
-A common pattern is to have a class that acts as both datasource and factory:
+A common pattern is to have a class that acts as both datasource and factory. This example wraps AWS boto3 clients:
 
 ```python title="Illustrative example"
+import sys #! hidden
+from types import ModuleType #! hidden
+from typing import Any #! hidden
+class FakeBoto3: #! hidden
+    @staticmethod #! hidden
+    def client(service_name: str, region_name: str) -> Any: #! hidden
+        class FakeClient: #! hidden
+            def describe_instances(self) -> dict: #! hidden
+                return {"Reservations": []} #! hidden
+        return FakeClient() #! hidden
+sys.modules["boto3"] = FakeBoto3()  # type: ignore #! hidden
+from typing import Annotated
+
+import boto3
+
 from watchpost import Datasource, DatasourceFactory, Watchpost, check, ok, FromFactory, EnvironmentRegistry
-from typing import Annotated #! hidden
+
 ENVIRONMENTS = EnvironmentRegistry() #! hidden
 PROD = ENVIRONMENTS.new("prod") #! hidden
 
@@ -363,16 +302,14 @@ class Boto3Client(Datasource, DatasourceFactory):
     scheduling_strategies = ()
 
     def __init__(self, service_name: str, region_name: str):
-        self.service_name = service_name
-        self.region_name = region_name
+        self._client = boto3.client(service_name, region_name=region_name)
 
     @classmethod
     def new(cls, service: str) -> "Boto3Client":  # (1)
         return cls(service, "eu-central-1")
 
-    def describe_instances(self):
-        # Implementation
-        ...
+    def __getattr__(self, name: str):  # (2)
+        return getattr(self._client, name)
 
 
 @check(
@@ -382,22 +319,24 @@ class Boto3Client(Datasource, DatasourceFactory):
     cache_for="5m",
 )
 def ec2_check(
-    ec2: Annotated[Boto3Client, FromFactory("ec2")],  # (2)
+    ec2: Annotated[Boto3Client, FromFactory("ec2")],  # (3)
 ):
-    instances = ec2.describe_instances()
-    return ok(f"Found {len(instances)} instances")
+    response = ec2.describe_instances()
+    instances = response["Reservations"]
+    yield ok(f"Found {len(instances)} reservations")
 
 
 app = Watchpost(
     checks=[ec2_check],
     execution_environment=PROD,
 )
-app.register_datasource_factory(Boto3Client)  # (3)
+app.register_datasource_factory(Boto3Client)  # (4)
 ```
 
 1. The class implements both `Datasource` and `DatasourceFactory`.
-2. When the factory type is omitted from `FromFactory`, Watchpost infers it from the parameter type.
-3. Register the class as a factory since checks use `FromFactory`.
+2. Delegate all attribute access to the underlying boto3 client.
+3. When the factory type is omitted from `FromFactory`, Watchpost infers it from the parameter type.
+4. Register the class as a factory since checks use `FromFactory`.
 
 ## Scheduling Strategies on Datasources
 
@@ -424,7 +363,7 @@ When a check uses multiple datasources, strategies from all datasources are comb
 
 ### Strategy Inheritance from Factories
 
-If a datasource leaves `scheduling_strategies` as `...` (ellipsis, the default), it inherits strategies from its factory:
+If a datasource sets `scheduling_strategies` to `None`, it inherits strategies from its factory:
 
 ```python title="Illustrative example"
 from watchpost import Datasource, DatasourceFactory
@@ -434,7 +373,7 @@ MONITORING = Environment("monitoring") #! hidden
 
 
 class ApiDatasource(Datasource):
-    scheduling_strategies = ...  # (1)
+    scheduling_strategies = None  # (1)
 
     def __init__(self, base_url: str):
         self.base_url = base_url
@@ -450,7 +389,7 @@ class ApiFactory(DatasourceFactory):
         return ApiDatasource(f"https://{service}.api.example.com")
 ```
 
-1. Ellipsis means "inherit from factory if applicable."
+1. `None` means "inherit from factory if applicable."
 2. All datasources created by this factory will have this strategy.
 
 ## Checkmk Integration

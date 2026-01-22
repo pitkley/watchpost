@@ -221,11 +221,13 @@ PROD = Environment("prod") #! hidden
     ],
 )
 def multi_host_check():
-    # If this fails, UNKNOWN appears for all three hosts
-    return ok("OK")
+    for host in ["host-a", "host-b", "host-c"]:
+        status = check_host(host)  # (2)
+        yield ok(f"Host {host} healthy", alternative_hostname=host)
 ```
 
 1. If the check raises an exception, the error result is duplicated across all specified hostnames.
+2. The check yields one result per hostname, so the error handler mirrors this behavior on failure.
 
 See [Error Handlers](../advanced/error-handlers.md) for details.
 
