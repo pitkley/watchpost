@@ -13,6 +13,11 @@ nav:
   - Datasources: fundamentals/datasources.md
   - Checks: fundamentals/checks.md
   - Results: fundamentals/results.md
+- Advanced:
+  - Scheduling Strategies: advanced/scheduling-strategies.md
+  - Hostname Resolution: advanced/hostname-resolution.md
+  - Caching: advanced/caching.md
+  - Error Handlers: advanced/error-handlers.md
 - API Reference: reference/api.md
 
 theme:
