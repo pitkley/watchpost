@@ -18,6 +18,12 @@ nav:
   - Hostname Resolution: advanced/hostname-resolution.md
   - Caching: advanced/caching.md
   - Error Handlers: advanced/error-handlers.md
+- Cookbook:
+  - Project Organization: cookbook/project-organization.md
+  - Datasource Patterns: cookbook/datasource-patterns.md
+  - Check Patterns: cookbook/check-patterns.md
+  - Caching Strategies: cookbook/caching-strategies.md
+  - Error Handling Patterns: cookbook/error-handling-patterns.md
 - API Reference: reference/api.md
 
 theme:
