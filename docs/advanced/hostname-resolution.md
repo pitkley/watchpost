@@ -106,12 +106,13 @@ def api_health():
 
 1. Produces `API Health-prod` for PROD and `API Health-staging` for STAGING.
 
-Available template variables:
+Template strings can use any field from the `HostnameContext` (see below). Common variables include:
 
 | Variable | Description |
 |----------|-------------|
 | `{service_name}` | The check's service name |
 | `{environment.name}` | The target environment's name |
+| `{service_labels.*}` | Any service label from the check |
 | `{check.*}` | Any attribute of the Check object |
 
 ### Callable Strategies
@@ -188,11 +189,11 @@ Built-in strategy classes:
 | `FunctionStrategy` | Wraps a callable |
 | `CompositeStrategy` | Tries multiple strategies in order |
 | `CoercingStrategy` | Wraps another strategy and coerces to RFC1123 |
-| `NoPiggybackHostStrategy` | Explicitly disables piggyback (results go to local host) |
+| `NoPiggybackHostStrategy` | Explicitly disables piggyback (results are associated with the Watchpost host itself) |
 
 ### Disabling Piggyback
 
-To have results appear on the host where Watchpost runs (no piggyback), use `NoPiggybackHostStrategy`:
+To have results associated with the Watchpost host itself (instead of a piggyback host), use `NoPiggybackHostStrategy`:
 
 ```python title="Illustrative example"
 from watchpost import check, ok
@@ -211,7 +212,7 @@ def local_check():
     return ok("OK")
 ```
 
-1. Results appear on the Checkmk host where the agent runs, not a piggyback host.
+1. Results are associated with the Watchpost host itself, not a piggyback host.
 
 ## Result-Level Hostname Override
 
@@ -260,13 +261,13 @@ By default, Watchpost coerces invalid hostnames to be RFC1123-compliant:
 from watchpost.hostname import coerce_to_rfc1123
 
 # Invalid characters replaced with hyphens
-coerce_to_rfc1123("My Service / Prod")  # Returns: "my-service-prod"
+assert coerce_to_rfc1123("My Service / Prod") == "my-service-prod"
 
 # Unicode normalized to ASCII
-coerce_to_rfc1123("service-caf\u00e9")  # Returns: "service-cafe"
+assert coerce_to_rfc1123("service-caf\u00e9") == "service-cafe"
 
 # Leading/trailing hyphens stripped from labels
-coerce_to_rfc1123("-my-service-")  # Returns: "my-service"
+assert coerce_to_rfc1123("-my-service-") == "my-service"
 ```
 
 ### Disabling Coercion
@@ -390,19 +391,6 @@ Useful for verifying hostname configuration before deployment.
 
 ## Checkmk Integration
 
-### Piggyback Format
-
-Watchpost generates output in Checkmk's piggyback format:
-
-```
-<<<<hostname>>>>
-<<<local>>>
-0 "Service Name" - Service is OK
-<<<<>>>>
-```
-
-The `<<<<hostname>>>>` line tells Checkmk which host should receive the following service data.
-
 ### Host Requirements
 
 For piggyback data to be processed:
@@ -419,6 +407,11 @@ For piggyback data to be processed:
 - Check that hostname is RFC1123-compliant
 - Run `get-check-hostnames` to see resolved hostnames
 - Check Checkmk's piggyback data in `var/check_mk/piggyback/`
+- Check for orphaned piggyback data (hosts receiving data but not configured):
+  ```console
+  OMD[mysite]:~$ cmk-piggyback list orphans
+  ```
+  See [Checkmk documentation on orphaned piggyback data](https://docs.checkmk.com/latest/en/piggyback.html#orphaned_piggyback_data) for more details.
 
 **Service on wrong host:**
 

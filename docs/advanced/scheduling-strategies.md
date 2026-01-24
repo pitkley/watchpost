@@ -10,7 +10,7 @@ Consider these scenarios:
 - A database check that can only run from a specific network zone
 - A check that monitors multiple environments but should only run from a central monitoring server
 
-Without scheduling strategies, you'd need separate Watchpost deployments for each scenario. Strategies let you express these constraints declaratively.
+Without scheduling strategies, you'd need separate Watchpost applications for each scenario. Strategies let you express these constraints declaratively from the same codebase.
 
 ## SchedulingDecision Enum
 
@@ -222,7 +222,7 @@ The `DetectImpossibleCombinationStrategy` validates that strategies don't create
 **Conflicting execution environments:**
 
 ```python title="Illustrative example" { "validate": false }
-from watchpost import Datasource, EnvironmentRegistry
+from watchpost import Datasource, EnvironmentRegistry, check, ok
 from watchpost.scheduling_strategy import MustRunInGivenExecutionEnvironmentStrategy
 
 ENVIRONMENTS = EnvironmentRegistry()
@@ -241,6 +241,14 @@ class DatasourceB(Datasource):
 
 # This check uses both datasources - impossible to satisfy both!
 # Raises InvalidCheckConfiguration at startup.
+@check(
+    name="Conflicting Check",
+    service_labels={},
+    environments=[ENV_A, ENV_B],
+    cache_for="5m",
+)
+def conflicting_check(ds_a: DatasourceA, ds_b: DatasourceB):
+    return ok("This can never run")
 ```
 
 **Impossible current==target with disjoint sets:**

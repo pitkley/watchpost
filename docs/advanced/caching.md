@@ -1,14 +1,18 @@
 # Caching
 
-Caching reduces load on monitored systems and provides resilience during temporary failures. Watchpost's caching system stores check results and can return them when re-execution isn't needed or isn't possible.
+Watchpost's caching system serves two distinct purposes:
 
-## Why Caching
+1. **Check result caching**: Watchpost caches check results to reduce load on monitored systems and provide resilience during temporary failures. This is configured via `check_cache_storage` on the application.
 
-Caching serves several purposes:
+2. **Custom caching for check implementations**: Check functions often depend on intermediate results that are expensive to compute. You can create and use separate `Cache` instances for your own purposes within checks.
+
+## Why Cache Check Results
+
+Caching check results provides several benefits:
 
 - **Reduce load**: Avoid hitting APIs or databases on every Checkmk poll
 - **Graceful degradation**: Return stale results when systems are temporarily unavailable
-- **Performance**: Fast responses for frequently-polled checks
+- **Restart resilience**: When Watchpost restarts, cached results are immediately available rather than waiting for potentially long-running checks to recompute
 - **Cost control**: Minimize API calls for rate-limited or metered services
 
 ## The cache_for Parameter
@@ -23,12 +27,12 @@ PROD = Environment("prod") #! hidden
 
 # String format
 @check(
-    name="Quick Check",
+    name="API Health",
     service_labels={},
     environments=[PROD],
-    cache_for="30s",  # (1)
+    cache_for="5m",  # (1)
 )
-def quick_check():
+def api_health():
     return ok("OK")
 
 # Timedelta format
@@ -52,25 +56,11 @@ def fresh_check():
     return ok("OK")
 ```
 
-1. String format: `30s`, `5m`, `1h`, `1d` (seconds, minutes, hours, days).
+1. String format: `5m`, `1h`, `1d` (minutes, hours, days). Since Checkmk retrieves data at most once per minute, cache durations below 2 minutes provide little benefit.
 2. Python `timedelta` for precise control.
-3. `None` disables caching - check runs every time.
+3. `None` disables caching - check runs every time Checkmk retrieves data from Watchpost.
 
 ## How Caching Works
-
-### Cache Keys
-
-Each check result is cached using a composite key:
-
-```
-{check.name}:{environment.name}
-```
-
-For example, a check named `myapp.checks.api.health_check` targeting the `prod` environment would have the cache key:
-
-```
-myapp.checks.api.health_check:prod
-```
 
 ### Cache Flow
 
@@ -152,17 +142,6 @@ app = Watchpost(
 - Not shared between hosts
 - Uses pickle serialization
 
-**File structure:**
-
-```
-/var/cache/watchpost/
-├── v1/
-│   ├── ab/
-│   │   └── abcdef123...  # Hashed cache key
-│   └── cd/
-│       └── cdef456...
-```
-
 **Best for:**
 
 - Single-instance deployments requiring persistence
@@ -191,27 +170,20 @@ app = Watchpost(
     execution_environment=PROD,
     check_cache_storage=RedisStorage(
         redis_client=redis_client,
-        use_redis_ttl=True,  # (1)
+        use_redis_ttl=False,  # (1)
         redis_key_infix="myapp",  # (2)
     ),
 )
 ```
 
-1. Use Redis's native TTL for automatic expiry (recommended).
-2. Optional namespace to avoid key collisions.
+1. When using `RedisStorage` for check result caching, keep `use_redis_ttl=False` (the default). This allows expired results to be returned once while a check re-executes, providing graceful degradation.
+2. Optional namespace to avoid key collisions between multiple Watchpost applications.
 
 **Characteristics:**
 
-- Shared across all Watchpost instances
+- Shared across all Watchpost instances (when using the same Redis instance)
 - Persists across restarts (depending on Redis config)
-- Network latency for each operation
 - Requires Redis infrastructure
-
-**Redis key format:**
-
-```
-watchpost:cache:{infix}:v{version}:{hash}
-```
 
 **Best for:**
 
@@ -219,9 +191,12 @@ watchpost:cache:{infix}:v{version}:{hash}
 - High availability setups
 - Shared cache across environments
 
+!!! warning "Ensure all instances use the same Redis"
+    When running multiple Watchpost instances, all must connect to the same Redis instance. Otherwise, results returned to Checkmk will be non-deterministic as different instances may have different cached values.
+
 ### ChainedStorage
 
-Combines multiple backends for layered caching.
+Combines multiple backends for layered caching. This is the recommended approach for multi-instance deployments.
 
 ```python title="Illustrative example"
 import os
@@ -260,7 +235,7 @@ This gives you the speed of in-memory caching with the persistence and sharing o
 
 **Best for:**
 
-- Production deployments requiring both speed and persistence
+- Multi-instance production deployments
 - Gradual rollout (in-memory only initially, add Redis later)
 
 ## Configuring the Cache
@@ -296,7 +271,7 @@ PROD = Environment("prod") #! hidden
     name="Frequent Check",
     service_labels={},
     environments=[PROD],
-    cache_for="30s",  # Short TTL for rapidly changing data
+    cache_for="2m",  # Short TTL for frequently changing data
 )
 def frequent_check():
     return ok("OK")
@@ -353,15 +328,19 @@ When a scheduling strategy returns `SKIP`:
 
 This allows strategies like maintenance windows to work with caching.
 
-## Memoization for Helper Functions
+## Custom Caching for Check Implementations
 
-For caching within checks (e.g., shared API calls), use the `Cache.memoize` decorator:
+While Watchpost uses caching internally for check results, check functions often depend on intermediate data that is expensive to compute. You're encouraged to create and use separate `Cache` instances for your own purposes.
+
+### Runtime Cache (In-Memory)
+
+For caching API responses or computed values within an execution cycle:
 
 ```python title="Illustrative example"
 from datetime import timedelta
 from watchpost.cache import Cache, InMemoryStorage
 
-# Shared cache instance
+# Shared runtime cache for API responses
 runtime_cache = Cache(InMemoryStorage())
 
 @runtime_cache.memoize(
@@ -375,41 +354,101 @@ def fetch_resources(resource_type: str) -> list:
 
 1. Key template uses function arguments.
 
-This is useful when multiple checks need the same expensive data within a single execution cycle.
+This is useful when multiple checks need the same data. The first check fetches it, subsequent checks use the cached value.
 
-## Cache Inspection
+### Persistent Cache (Disk)
 
-The `CheckCache` class provides methods to inspect cached data:
+For caching large files or data that should survive restarts:
 
-```python title="Illustrative example" { "validate": false }
-from watchpost.check import CheckCache
-from watchpost.cache import InMemoryStorage
+```python title="Illustrative example"
+from datetime import timedelta
+from watchpost.cache import Cache, DiskStorage
 
-cache = CheckCache(InMemoryStorage())
+# Persistent cache for large downloads
+persistent_cache = Cache(DiskStorage("/var/cache/myapp"))
 
-# Get cached results for a check/environment
-entry = cache.get_check_results_cache_entry(
-    check=my_check,
-    environment=PROD,
-    return_expired=True,  # Include expired entries
+def get_sitemap(url: str) -> str:
+    """Fetch sitemap XML, cached to disk."""
+    cache_entry = persistent_cache.get(f"sitemap:{url}")  # (1)
+    if cache_entry is not None:
+        return cache_entry.value
+
+    # Download the sitemap
+    content = download_large_file(url)
+
+    persistent_cache.store(  # (2)
+        f"sitemap:{url}",
+        content,
+        ttl=timedelta(hours=6),
+    )
+    return content
+```
+
+1. Use `.get()` to retrieve cached values directly.
+2. Use `.store()` to cache values with a TTL.
+
+A real-world example: a check that validates a website's sitemap.xml, which with child sitemaps can require downloading very large XML files. Caching these to disk avoids repeated downloads.
+
+### Using the Memoize Decorator
+
+The `@cache.memoize` decorator provides a convenient way to cache function results:
+
+```python title="Illustrative example"
+from datetime import timedelta
+from watchpost.cache import Cache, InMemoryStorage
+
+cache = Cache(InMemoryStorage())
+
+@cache.memoize(
+    key="{client_id}:{resource}",  # (1)
+    ttl=timedelta(minutes=10),
+    return_expired=True,  # (2)
 )
+def get_resource_status(client_id: str, resource: str) -> dict:
+    return api.get_status(client_id, resource)
+```
 
-if entry:
-    print(f"Cached at: {entry.added_at}")
-    print(f"TTL: {entry.ttl}")
-    print(f"Expired: {entry.is_expired()}")
-    for result in entry.value:
-        print(f"  {result.service_name}: {result.check_state}")
+1. Key is built from function arguments using format string placeholders.
+2. `return_expired=True` returns stale data once while recomputing, providing graceful degradation.
+
+### Using Store and Get Directly
+
+For more control, use the cache's `.store()` and `.get()` methods:
+
+```python title="Illustrative example"
+from datetime import timedelta
+from watchpost.cache import Cache, InMemoryStorage
+
+cache = Cache(InMemoryStorage())
+
+def process_data(data_id: str) -> dict:
+    # Try to get from cache
+    entry = cache.get(f"processed:{data_id}")
+    if entry is not None:
+        return entry.value
+
+    # Compute the result
+    result = expensive_computation(data_id)
+
+    # Store with custom TTL
+    cache.store(
+        f"processed:{data_id}",
+        result,
+        ttl=timedelta(hours=1),
+    )
+    return result
 ```
 
 ## Best Practices
 
 ### Choosing Cache Duration
 
+Since Checkmk retrieves data at most once per minute, cache durations below 2 minutes provide little benefit.
+
 | Scenario | Recommended TTL |
 |----------|-----------------|
-| Real-time metrics | `30s` - `1m` |
-| API health checks | `1m` - `5m` |
+| Frequently changing metrics | `2m` - `5m` |
+| API health checks | `5m` - `15m` |
 | Database status | `5m` - `15m` |
 | Certificate expiry | `1h` - `1d` |
 | Static configuration | `1d` or longer |
@@ -420,20 +459,7 @@ if entry:
 |------------|---------------------|
 | Development | `InMemoryStorage` |
 | Single instance, needs persistence | `DiskStorage` |
-| Multiple instances | `RedisStorage` |
-| Multiple instances, high performance | `ChainedStorage` (memory + Redis) |
-
-### Cache Warming
-
-For checks with long TTLs, consider running them at startup:
-
-```python title="Illustrative example" { "validate": false }
-# In your startup script
-from myapp import app
-
-# Run all checks once to warm the cache
-app.run_checks_sync()
-```
+| Multiple instances | `ChainedStorage` (memory + Redis) |
 
 ## Next Steps
 

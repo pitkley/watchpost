@@ -111,27 +111,31 @@ from watchpost.check import expand_by_name_suffix
 from watchpost import Environment #! hidden
 PROD = Environment("prod") #! hidden
 
+ENDPOINTS = ["/api/users", "/api/orders", "/api/products"]
+
 @check(
-    name="Endpoint Status",
+    name="Endpoint Status -",  # (1)
     service_labels={},
     environments=[PROD],
     cache_for="5m",
     error_handlers=[
-        expand_by_name_suffix([" - /api/users", " - /api/orders", " - /api/products"]),  # (1)
+        expand_by_name_suffix([f" {ep}" for ep in ENDPOINTS]),  # (2)
     ],
 )
 def endpoint_status():
-    for endpoint in ["/api/users", "/api/orders", "/api/products"]:
+    for endpoint in ENDPOINTS:  # (3)
         status = check_endpoint(endpoint)
-        yield ok(f"Endpoint healthy", name_suffix=f" - {endpoint}")
+        yield ok(f"Endpoint healthy", name_suffix=f" {endpoint}")
 ```
 
-1. If the check fails, the error result is duplicated with each suffix.
+1. Include the separator in the service name for cleaner formatting.
+2. Use the same `ENDPOINTS` constant to ensure consistency.
+3. Loop uses the same constant, so error handlers always match actual results.
 
 **Before expansion:**
 
 ```
-1 error result → service_name: "Endpoint Status"
+1 error result → service_name: "Endpoint Status -"
 ```
 
 **After expansion:**
@@ -153,24 +157,28 @@ from watchpost.check import expand_by_hostname, expand_by_name_suffix
 from watchpost import Environment #! hidden
 PROD = Environment("prod") #! hidden
 
+HOSTS = ["host-a", "host-b"]
+SERVICES = ["API", "DB"]
+
 @check(
-    name="Service Status",
+    name="Service Status -",  # (1)
     service_labels={},
     environments=[PROD],
     cache_for="5m",
     error_handlers=[
-        expand_by_hostname(["host-a", "host-b"]),  # (1)
-        expand_by_name_suffix([" - API", " - DB"]),  # (2)
+        expand_by_hostname(HOSTS),  # (2)
+        expand_by_name_suffix([f" {s}" for s in SERVICES]),  # (3)
     ],
 )
 def service_status():
-    for host in ["host-a", "host-b"]:
-        for service in ["API", "DB"]:
-            yield ok(f"OK", alternative_hostname=host, name_suffix=f" - {service}")
+    for host in HOSTS:
+        for service in SERVICES:
+            yield ok(f"OK", alternative_hostname=host, name_suffix=f" {service}")
 ```
 
-1. First expands 1 → 2 results (by hostname).
-2. Then expands 2 → 4 results (by suffix).
+1. Include the separator in the service name.
+2. First expands 1 → 2 results (by hostname).
+3. Then expands 2 → 4 results (by suffix).
 
 **Expansion chain:**
 
@@ -301,13 +309,13 @@ HOSTS = ["web-01", "web-02", "web-03"]
 SERVICES = ["nginx", "postgres", "redis"]
 
 @check(
-    name="Infrastructure",
+    name="Infrastructure -",  # (1)
     service_labels={},
     environments=[PROD],
     cache_for="5m",
     error_handlers=[
-        expand_by_hostname(HOSTS),  # (1)
-        expand_by_name_suffix([f" - {s}" for s in SERVICES]),  # (2)
+        expand_by_hostname(HOSTS),  # (2)
+        expand_by_name_suffix([f" {s}" for s in SERVICES]),  # (3)
     ],
 )
 def infrastructure_check(checker: HostChecker):
@@ -322,25 +330,26 @@ def infrastructure_check(checker: HostChecker):
                     yield ok(
                         f"{service} healthy",
                         alternative_hostname=host,
-                        name_suffix=f" - {service}",
+                        name_suffix=f" {service}",
                     )
                 else:
                     yield warn(
                         f"{service} degraded",
                         alternative_hostname=host,
-                        name_suffix=f" - {service}",
+                        name_suffix=f" {service}",
                     )
             except Exception as e:
                 # Per-service errors handled here
                 yield crit(
                     f"{service} check failed: {e}",
                     alternative_hostname=host,
-                    name_suffix=f" - {service}",
+                    name_suffix=f" {service}",
                 )
 ```
 
-1. Catastrophic failures expand to all hosts.
-2. Then expand to all services per host (3 hosts × 3 services = 9 results).
+1. Include the separator in the service name.
+2. Catastrophic failures expand to all hosts.
+3. Then expand to all services per host (3 hosts × 3 services = 9 results).
 
 **Result:**
 
