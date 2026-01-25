@@ -9,6 +9,7 @@ When a single logical check should produce separate Checkmk services for each it
 ```python title="Illustrative example"
 from datetime import datetime, timedelta
 from watchpost import check, ok, warn, crit, Environment, Datasource
+from watchpost.check import expand_by_name_suffix
 PROD = Environment("prod") #! hidden
 
 class BackupClient(Datasource): #! hidden
@@ -16,11 +17,15 @@ class BackupClient(Datasource): #! hidden
     def list_plans(self): return [] #! hidden
     def get_last_successful_run(self, plan_id: str): return None #! hidden
 
+# Define known backup plans for error handler
+BACKUP_PLANS = ["database-daily", "files-hourly", "config-weekly"]
+
 
 @check(
-    name="Backup Plan Status",
+    name="Backup Plan Status -",  # (1)
     service_labels={},
     environments=[PROD],
+    error_handlers=[expand_by_name_suffix(BACKUP_PLANS)],  # (2)
     cache_for="30m",
 )
 def backup_plan_status(backup_client: BackupClient):
@@ -34,13 +39,12 @@ def backup_plan_status(backup_client: BackupClient):
     plans = backup_client.list_plans()
 
     for plan in plans:
-        name_suffix = f" - {plan.name}"
         last_run = backup_client.get_last_successful_run(plan.id)
 
         if last_run is None:
             yield crit(
                 f"No successful backup found for {plan.name}",
-                name_suffix=name_suffix,
+                name_suffix=plan.name,  # (3)
             )
             continue
 
@@ -51,21 +55,25 @@ def backup_plan_status(backup_client: BackupClient):
         if age > critical_threshold:
             yield crit(
                 f"Backup is {age} old",
-                name_suffix=name_suffix,
+                name_suffix=plan.name,
                 details=f"Last successful: {last_run.completed_at}",
             )
         elif age > warning_threshold:
             yield warn(
                 f"Backup is {age} old",
-                name_suffix=name_suffix,
+                name_suffix=plan.name,
                 details=f"Last successful: {last_run.completed_at}",
             )
         else:
             yield ok(
                 f"Backup completed {age} ago",
-                name_suffix=name_suffix,
+                name_suffix=plan.name,
             )
 ```
+
+1. Include the separator ` -` in the check name, so service names read naturally.
+2. Error handlers ensure all services get an error result if the check fails entirely.
+3. The `name_suffix` is just the item name without the separator.
 
 **When to use:**
 
@@ -169,6 +177,7 @@ When the same check runs across multiple environments but thresholds or paramete
 ```python title="Illustrative example"
 from datetime import timedelta
 from watchpost import check, ok, warn, crit, Environment, Datasource
+from watchpost.check import expand_by_name_suffix
 
 DEV = Environment("dev")
 STAGING = Environment("staging")
@@ -193,11 +202,15 @@ BACKUP_CONFIG: dict[Environment, dict[str, dict[str, timedelta]]] = {
     },
 }
 
+# All possible backup names across environments for error handler
+ALL_BACKUP_NAMES = ["database", "files", "config"]
+
 
 @check(
-    name="Backup Age",
+    name="Backup Age -",
     service_labels={},
     environments=[DEV, STAGING, PROD],
+    error_handlers=[expand_by_name_suffix(ALL_BACKUP_NAMES)],
     cache_for="30m",
 )
 def backup_age(environment: Environment, backup_client: BackupClient):
@@ -206,22 +219,21 @@ def backup_age(environment: Environment, backup_client: BackupClient):
 
     for backup_name, thresholds in config.items():
         age = backup_client.get_backup_age(backup_name)
-        name_suffix = f" - {backup_name}"
 
         if age > thresholds["crit"]:
             yield crit(
                 f"{backup_name} backup is critically old",
-                name_suffix=name_suffix,
+                name_suffix=backup_name,
             )
         elif age > thresholds["warn"]:
             yield warn(
                 f"{backup_name} backup is getting old",
-                name_suffix=name_suffix,
+                name_suffix=backup_name,
             )
         else:
             yield ok(
                 f"{backup_name} backup is fresh",
-                name_suffix=name_suffix,
+                name_suffix=backup_name,
             )
 ```
 
@@ -280,6 +292,7 @@ For checks that produce multiple results where each should go to a different hos
 
 ```python title="Illustrative example"
 from watchpost import check, ok, Environment, Datasource
+from watchpost.check import expand_by_name_suffix
 PROD = Environment("prod") #! hidden
 
 class MultiHostClient(Datasource): #! hidden
@@ -287,12 +300,16 @@ class MultiHostClient(Datasource): #! hidden
     def get_hosts(self): return [] #! hidden
     def get_status(self, host: object): return None #! hidden
 
+# Known hosts for error handler
+KNOWN_HOSTS = ["host-a", "host-b", "host-c"]
+
 
 @check(
-    name="Multi-Host Status",
+    name="Multi-Host Status -",
     service_labels={},
     environments=[PROD],
     hostname="default-host",  # Fallback
+    error_handlers=[expand_by_name_suffix(KNOWN_HOSTS)],
     cache_for="5m",
 )
 def multi_host_status(client: MultiHostClient):
@@ -300,7 +317,7 @@ def multi_host_status(client: MultiHostClient):
         status = client.get_status(host)
         yield ok(
             f"Host {host.name} is healthy",
-            name_suffix=f" - {host.name}",
+            name_suffix=host.name,
             alternative_hostname=host.checkmk_hostname,  # Override per result
         )
 ```
@@ -322,6 +339,7 @@ When you have many similar items to check with different expected states or seve
 
 ```python title="Illustrative example"
 from watchpost import check, ok, warn, crit, Environment, Datasource
+from watchpost.check import expand_by_name_suffix
 from typing import Callable
 from watchpost.result import CheckResult
 PROD = Environment("prod") #! hidden
@@ -341,11 +359,15 @@ EXPECTED_RUNNING: dict[str, Callable[..., CheckResult]] = {
 # Items to ignore (not monitored)
 IGNORED = {"test-container", "debug-service"}
 
+# All service names for error handler (including "unknown" summary)
+SERVICE_SUFFIXES = [*EXPECTED_RUNNING.keys(), "unknown"]
+
 
 @check(
-    name="Service Status",
+    name="Service Status -",
     service_labels={},
     environments=[PROD],
+    error_handlers=[expand_by_name_suffix(SERVICE_SUFFIXES)],
     cache_for="5m",
 )
 def service_status(docker: DockerClient):
@@ -364,12 +386,12 @@ def service_status(docker: DockerClient):
             if service.status != "running":
                 yield severity_fn(
                     f"{service.name} is {service.status}",
-                    name_suffix=f" - {service.name}",
+                    name_suffix=service.name,
                 )
             else:
                 yield ok(
                     f"{service.name} is running",
-                    name_suffix=f" - {service.name}",
+                    name_suffix=service.name,
                 )
         elif service.status == "running":
             unknown_running.append(service.name)
@@ -378,10 +400,10 @@ def service_status(docker: DockerClient):
     if unknown_running:
         yield warn(
             f"Unknown services running: {', '.join(unknown_running)}",
-            name_suffix=" - unknown",
+            name_suffix="unknown",
         )
     else:
-        yield ok("No unknown services running", name_suffix=" - unknown")
+        yield ok("No unknown services running", name_suffix="unknown")
 ```
 
 **When to use:**
@@ -403,6 +425,7 @@ Create a reusable pattern for tracking deadlines (certificate expiry, license re
 from dataclasses import dataclass
 from datetime import date, timedelta, datetime, UTC
 from watchpost import check, ok, warn, crit, Environment, Datasource
+from watchpost.check import expand_by_name_suffix
 from watchpost.hostname import HostnameInput
 PROD = Environment("prod") #! hidden
 
@@ -441,10 +464,11 @@ DEADLINES = {
 
 
 @check(
-    name="Deadline",
+    name="Deadline -",
     service_labels={},
     environments=[PROD],
     hostname="misc-checks",
+    error_handlers=[expand_by_name_suffix(list(DEADLINES.keys()))],
     cache_for="1d",
 )
 def deadline_check(local: Local):
@@ -464,28 +488,28 @@ def deadline_check(local: Local):
         if remaining < timedelta(0):
             yield crit(
                 f"EXPIRED {abs(remaining.days)} days ago",
-                name_suffix=f" - {name}",
+                name_suffix=name,
                 details=details,
                 alternative_hostname=dl.alternative_hostname,
             )
         elif remaining < dl.crit_before:
             yield crit(
                 f"Expires in {remaining.days} days",
-                name_suffix=f" - {name}",
+                name_suffix=name,
                 details=details,
                 alternative_hostname=dl.alternative_hostname,
             )
         elif remaining < dl.warn_before:
             yield warn(
                 f"Expires in {remaining.days} days",
-                name_suffix=f" - {name}",
+                name_suffix=name,
                 details=details,
                 alternative_hostname=dl.alternative_hostname,
             )
         else:
             yield ok(
                 f"Valid for {remaining.days} more days",
-                name_suffix=f" - {name}",
+                name_suffix=name,
                 alternative_hostname=dl.alternative_hostname,
             )
 ```
@@ -508,6 +532,7 @@ Monitor running containers or processes, ensuring expected ones are running and 
 ```python title="Illustrative example"
 from typing import Callable
 from watchpost import check, ok, warn, crit, build_result, Environment, Datasource
+from watchpost.check import expand_by_name_suffix
 from watchpost.result import CheckResult
 PROD = Environment("prod") #! hidden
 
@@ -526,11 +551,15 @@ EXPECTED_CONTAINERS: dict[str, Callable[..., CheckResult]] = {
 # Containers to ignore (e.g., temporary, debug)
 IGNORED_CONTAINERS = {"debug-shell", "migration-runner"}
 
+# All container names for error handler (including "inventory" summary)
+CONTAINER_SUFFIXES = [*EXPECTED_CONTAINERS.keys(), "inventory"]
+
 
 @check(
-    name="Container Status",
+    name="Container Status -",
     service_labels={},
     environments=[PROD],
+    error_handlers=[expand_by_name_suffix(CONTAINER_SUFFIXES)],
     cache_for="5m",
 )
 def container_status(docker: DockerClient):
@@ -541,7 +570,7 @@ def container_status(docker: DockerClient):
     unknown_summary = build_result(
         ok_summary="No unknown containers",
         fail_summary="Unknown containers detected",
-        name_suffix=" - inventory",
+        name_suffix="inventory",
     )
 
     for container in containers:
@@ -559,17 +588,17 @@ def container_status(docker: DockerClient):
             if container.status != "running":
                 yield severity_fn(
                     f"{name} is {container.status}",
-                    name_suffix=f" - {name}",
+                    name_suffix=name,
                     details=f"Expected: running\nActual: {container.status}",
                 )
             elif hasattr(container, "health") and container.health != "healthy":
                 yield severity_fn(
                     f"{name} is unhealthy",
-                    name_suffix=f" - {name}",
+                    name_suffix=name,
                     details=f"Health: {container.health}",
                 )
             else:
-                yield ok(f"{name} is healthy", name_suffix=f" - {name}")
+                yield ok(f"{name} is healthy", name_suffix=name)
 
         # Track unexpected running containers
         elif container.status == "running":
@@ -581,7 +610,7 @@ def container_status(docker: DockerClient):
         severity_fn = EXPECTED_CONTAINERS[name]
         yield severity_fn(
             f"{name} not found",
-            name_suffix=f" - {name}",
+            name_suffix=name,
             details="Container does not exist",
         )
 

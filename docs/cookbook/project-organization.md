@@ -73,11 +73,11 @@ PROD = registry.new("prod")
 os.environ.setdefault("WATCHPOST_ENVIRONMENT", "prod")
 
 # Determine execution environment from env var
-EXECUTION_ENV = registry[os.environ["WATCHPOST_ENVIRONMENT"]]
+EXECUTION_ENVIRONMENT = registry[os.environ["WATCHPOST_ENVIRONMENT"]]
 
 app = Watchpost(
     checks=[],  # Pass modules for automatic discovery
-    execution_environment=EXECUTION_ENV,
+    execution_environment=EXECUTION_ENVIRONMENT,
 )
 
 # Register datasources with constructor arguments
@@ -163,7 +163,7 @@ from watchpost.cache import Cache, InMemoryStorage
 RUNTIME_CACHE = Cache(InMemoryStorage())
 ```
 
-Use in checks with the memoize decorator:
+Use in checks with the `@memoize` decorator or direct `get`/`store` calls:
 
 ```python title="Illustrative example"
 from datetime import timedelta
@@ -171,6 +171,7 @@ from watchpost.cache import Cache, InMemoryStorage
 
 RUNTIME_CACHE = Cache(InMemoryStorage())
 
+# Option 1: Using the memoize decorator
 @RUNTIME_CACHE.memoize(
     key="{resource_type}",
     ttl=timedelta(minutes=15),
@@ -178,6 +179,22 @@ RUNTIME_CACHE = Cache(InMemoryStorage())
 def list_resources(resource_type: str) -> list:
     """Fetch resources - cached across checks within same execution."""
     return []  # Would call client.list_resources(resource_type)
+
+
+# Option 2: Using get/store directly for more control
+def get_service_config(service_name: str) -> dict:
+    """Fetch config with manual cache management."""
+    cache_key = f"config:{service_name}"
+
+    # Try to get from cache
+    entry = RUNTIME_CACHE.get(cache_key)
+    if entry is not None:
+        return entry.value
+
+    # Fetch and cache
+    config = {}  # Would fetch from API
+    RUNTIME_CACHE.store(cache_key, config, ttl=timedelta(minutes=30))
+    return config
 ```
 
 See [Caching Strategies](caching-strategies.md) for more details.
@@ -199,7 +216,7 @@ os.environ.setdefault("WATCHPOST_ENVIRONMENT", "prod") #! hidden
 os.environ.setdefault("DB_HOST", "localhost") #! hidden
 
 # Required configuration
-EXECUTION_ENV = registry[os.environ["WATCHPOST_ENVIRONMENT"]]
+EXECUTION_ENVIRONMENT = registry[os.environ["WATCHPOST_ENVIRONMENT"]]
 DB_HOST = os.environ["DB_HOST"]
 
 # Optional configuration with defaults
@@ -208,7 +225,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
 app = Watchpost(
     checks=[],
-    execution_environment=EXECUTION_ENV,
+    execution_environment=EXECUTION_ENVIRONMENT,
 )
 
 # Register datasources using the configuration
@@ -228,7 +245,7 @@ app = Watchpost(
 
 Consider splitting when:
 
-- A file exceeds ~500 lines
+- A file feels too large to navigate comfortably
 - Multiple developers frequently edit the same file
 - You want to enable/disable entire categories of checks
 - Different teams own different monitoring domains
@@ -238,6 +255,9 @@ Don't over-organize:
 - A single file with 10 checks is fine
 - Avoid deeply nested directory structures
 - Start simple and refactor when pain is felt
+
+!!! tip "Reorganizing is safe"
+    Moving check functions between files causes no friction in Checkmk as long as the `@check(name=...)` and any `name_suffix` values stay unchanged. Checkmk identifies services by name, not by where they're defined in your code.
 
 ## Example: Complete Project Structure
 
@@ -272,7 +292,7 @@ PROD = registry.new("prod")
 # Set defaults for example #! hidden
 os.environ.setdefault("WATCHPOST_ENVIRONMENT", "prod") #! hidden
 
-EXECUTION_ENV = registry[os.environ["WATCHPOST_ENVIRONMENT"]]
+EXECUTION_ENVIRONMENT = registry[os.environ["WATCHPOST_ENVIRONMENT"]]
 
 # Build cache storage
 storages = [InMemoryStorage()]
@@ -282,7 +302,7 @@ storages = [InMemoryStorage()]
 
 app = Watchpost(
     checks=[],  # Pass check modules here
-    execution_environment=EXECUTION_ENV,
+    execution_environment=EXECUTION_ENVIRONMENT,
     check_cache_storage=ChainedStorage(storages),
 )
 

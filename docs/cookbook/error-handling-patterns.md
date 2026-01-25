@@ -4,7 +4,7 @@ This page covers patterns for graceful error handling in Watchpost. For foundati
 
 ## DatasourceUnavailable for Temporary Failures
 
-The `DatasourceUnavailable` exception distinguishes "can't check" from "check failed." When raised, the check result becomes UNKNOWN rather than CRIT:
+The `DatasourceUnavailable` exception distinguishes "can't check" from "check failed." When raised, Watchpost first attempts to return a previously cached result. If no cached result is available, the check result becomes UNKNOWN rather than CRIT:
 
 ```python title="Illustrative example"
 import httpx
@@ -55,11 +55,11 @@ class ExternalApiClient(Datasource):
 
 When `DatasourceUnavailable` is raised:
 
-- Check result is **UNKNOWN** (not CRIT)
-- Message indicates the datasource issue
-- Operators see "can't determine status" rather than false alarm
+1. **If cached results exist**: Watchpost returns the previously cached result. For truly temporary blips, the issue never surfaces in Checkmk, reducing noise to a minimum.
 
-This prevents on-call alerts for temporary network blips while still surfacing the issue.
+2. **If cache is expired or empty**: The check result becomes **UNKNOWN** (not CRIT). The message indicates the datasource issue, and operators see "can't determine status" rather than a false alarm.
+
+This two-tier approach means temporary network hiccups are silently handled via caching, while persistent issues are surfaced as UNKNOWN after the cache expires.
 
 ## Validation with Specific Error Messages
 

@@ -367,7 +367,7 @@ class MyApiClient(Datasource):
 
 ## Callable Credentials
 
-Pass callables instead of strings when credentials should be evaluated at registration time (not import time):
+Pass callables instead of strings when credentials should be evaluated at factory resolution time (not import time):
 
 ```python title="Illustrative example"
 import os
@@ -375,48 +375,46 @@ from typing import Callable
 from watchpost import Datasource, DatasourceFactory
 
 
-def get_api_token() -> str:
-    """Callable that returns the token - evaluated when new() is called."""
-    os.environ.setdefault("API_TOKEN", "test-token") #! hidden
-    return os.environ["API_TOKEN"]
-
-
 class ApiClient(Datasource, DatasourceFactory):
+    """Datasource that accepts callable credentials."""
+
     scheduling_strategies = ()
 
     def __init__(self, api_token: str):
         self.token = api_token
 
     @classmethod
-    def new(cls, api_token: str | Callable[[], str] | None = None) -> "ApiClient":
-        # Support both direct string and callable
-        if api_token is None:
-            api_token = get_api_token()
-        elif callable(api_token):
+    def new(cls, api_token: str | Callable[[], str]) -> "ApiClient":
+        # Resolve callable at factory time
+        if callable(api_token):
             api_token = api_token()
         return cls(api_token=api_token)
 ```
 
 ### Usage with FromFactory
 
+Define the credential-fetching function at the call site where you use `FromFactory`:
+
 ```python title="Illustrative example"
-import os #! hidden
+import os
 from typing import Annotated, Callable
 from watchpost import check, ok, FromFactory, Environment, Datasource, DatasourceFactory
 PROD = Environment("prod") #! hidden
-
-def get_api_token() -> str: #! hidden
-    os.environ.setdefault("API_TOKEN", "test-token") #! hidden
-    return os.environ["API_TOKEN"] #! hidden
 
 class ApiClient(Datasource, DatasourceFactory): #! hidden
     scheduling_strategies = () #! hidden
     def __init__(self, api_token: str): self.token = api_token #! hidden
     @classmethod #! hidden
-    def new(cls, api_token: str | Callable[[], str] | None = None) -> "ApiClient": #! hidden
-        if api_token is None: api_token = get_api_token() #! hidden
-        elif callable(api_token): api_token = api_token() #! hidden
+    def new(cls, api_token: str | Callable[[], str]) -> "ApiClient": #! hidden
+        if callable(api_token): api_token = api_token() #! hidden
         return cls(api_token=api_token) #! hidden
+
+
+def get_api_token() -> str:
+    """Fetch token from environment - evaluated when check runs, not at import."""
+    os.environ.setdefault("API_TOKEN", "test-token") #! hidden
+    return os.environ["API_TOKEN"]
+
 
 @check(
     name="API Status",
