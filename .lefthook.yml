@@ -26,6 +26,11 @@ pre-commit:
     - lint
     glob: "*.py"
     run: uv run mypy examples/ src/
+  - name: lockfile
+    tags:
+    - python
+    glob: "pyproject.toml"
+    run: uv lock --check
 
 pre-push:
   parallel: true
