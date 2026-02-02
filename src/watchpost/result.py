@@ -169,6 +169,25 @@ class CheckState(Enum):
             case _:
                 assert_never(self)  # type: ignore[type-assertion-failure]
 
+    @property
+    def state_marker(self) -> str:
+        """
+        Returns a Checkmk output compatible state marker (such as `(!!)` for
+        CRIT) which Checkmk will automatically render as a visual status label.
+        """
+
+        match self:
+            case CheckState.OK:
+                return "(.)"
+            case CheckState.WARN:
+                return "(!)"
+            case CheckState.CRIT:
+                return "(!!)"
+            case CheckState.UNKNOWN:
+                return "(?)"
+            case _:
+                assert_never(self)  # type: ignore[type-assertion-failure]
+
 
 @dataclass(init=False)
 class CheckResult:
@@ -457,7 +476,7 @@ class OngoingCheckResult:
 
         def __str__(self) -> str:
             if self.details:
-                return f"{self.summary}:\n{normalize_details(self.details)}\n"
+                return f"{self.summary} {self.check_state.state_marker}:\n{normalize_details(self.details)}\n"
             return f"{self.summary}\n"
 
     def __init__(

@@ -69,14 +69,15 @@ def test_details_are_included():
     check_result = r.to_check_result()
     assert check_result.check_state == CheckState.OK
     assert check_result.summary == "OK"
-    assert check_result.details == "OK Summary:\nOK Details"
+    assert check_result.details == "OK Summary (.):\nOK Details"
 
     r.crit("CRIT Summary", "CRIT Details")
     check_result = r.to_check_result()
     assert check_result.check_state == CheckState.CRIT
     assert check_result.summary == "FAIL"
     assert (
-        check_result.details == "OK Summary:\nOK Details\n\nCRIT Summary:\nCRIT Details"
+        check_result.details
+        == "OK Summary (.):\nOK Details\n\nCRIT Summary (!!):\nCRIT Details"
     )
 
 
@@ -94,7 +95,7 @@ def test_complex_details_are_supported():
     r.ok("OK - 1", details={"subkey1": "subvalue1"})
     check_result = r.to_check_result()
     assert check_result.check_state == CheckState.OK
-    assert check_result.details == "key: value\n\nOK - 1:\nsubkey1: subvalue1"
+    assert check_result.details == "key: value\n\nOK - 1 (.):\nsubkey1: subvalue1"
 
     try:
         raise ValueError("test error in details")
