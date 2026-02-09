@@ -6,9 +6,11 @@
   "dependencyDashboard": false,
   "minimumReleaseAge": "7 days",
   "internalChecksFilter": "strict",
+  "separateMinorPatch": true,
   "prConcurrentLimit": 5,
   "packageRules": [
     {
+      "groupName": "safe dependency updates",
       "matchUpdateTypes": [
         "patch",
         "pin",
