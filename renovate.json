@@ -13,6 +13,20 @@
   "prConcurrentLimit": 5,
   "packageRules": [
     {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "checkmk/check-mk-raw"
+      ],
+      "matchFileNames": [
+        "checkmk-integration/Dockerfile.checkmk"
+      ],
+      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+p\\d+$/",
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)p(?<build>\\d+)$",
+      "automerge": false
+    },
+    {
       "groupName": "safe dependency updates",
       "matchUpdateTypes": [
         "patch",
