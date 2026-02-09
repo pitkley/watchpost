@@ -7,7 +7,7 @@ on:
     - renovate/**
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   refresh-third-party-licenses:
@@ -15,10 +15,23 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v6
+      with:
+        persist-credentials: false
     - name: Install uv
       uses: astral-sh/setup-uv@v6
     - name: Set up Python
       run: uv python install
+    - name: Configure SSH for deploy key
+      env:
+        GITHUBACTIONS_DEPLOY_KEY: ${{ secrets.GITHUBACTIONS_DEPLOY_KEY }}
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+        chmod 644 ~/.ssh/known_hosts
+        eval "$(ssh-agent -s)"
+        ssh-add - <<< "$GITHUBACTIONS_DEPLOY_KEY"
+        git remote set-url origin git@github.com:${{ github.repository }}.git
     - name: Regenerate THIRD_PARTY_LICENSES.md
       run: ./.tools/show-third-party-licenses.sh > THIRD_PARTY_LICENSES.md
     - name: Commit updated THIRD_PARTY_LICENSES.md
