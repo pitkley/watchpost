@@ -8,7 +8,7 @@
   "internalChecksFilter": "strict",
   "separateMinorPatch": true,
   "gitIgnoredAuthors": [
-    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+    "41898282+github-actions[bot]@users.noreply.github.com"
   ],
   "prConcurrentLimit": 5,
   "packageRules": [
