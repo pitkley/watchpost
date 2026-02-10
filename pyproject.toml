@@ -1,6 +1,6 @@
 [project]
 name = "watchpost"
-version = "0.1.2"
+version = "0.1.3"
 description = "Code driven monitoring checks for Checkmk"
 readme = "README.md"
 license = "Apache-2.0"
