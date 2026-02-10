@@ -29,7 +29,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "starlette>=0.47.3,<0.48.0",
+    "starlette>=0.52.1,<0.53.0",
     "timelength>=3.0.2,<3.1.0",
 ]
 
