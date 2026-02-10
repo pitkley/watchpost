@@ -514,11 +514,11 @@ Find a list of packages below
 - License: APACHE SOFTWARE LICENSE;; MIT LICENSE
 - Compatible: True
 
-### starlette-0.47.3
+### starlette-0.52.1
 
 - HomePage: UNKNOWN
 - Author: UNKNOWN
-- License: BSD LICENSE
+- License: BSD-3-CLAUSE
 - Compatible: True
 
 ### testcontainers-4.13.1
