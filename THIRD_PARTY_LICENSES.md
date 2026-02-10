@@ -493,7 +493,7 @@ Find a list of packages below
 - License: MIT LICENSE
 - Compatible: True
 
-### ruff-0.13.2
+### ruff-0.15.0
 
 - HomePage: https://docs.astral.sh/ruff
 - Author: UNKNOWN
