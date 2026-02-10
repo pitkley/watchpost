@@ -27,10 +27,17 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
+        printf '%s\n' "$GITHUBACTIONS_DEPLOY_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
         ssh-keyscan github.com >> ~/.ssh/known_hosts
         chmod 644 ~/.ssh/known_hosts
-        eval "$(ssh-agent -s)"
-        ssh-add - <<< "$GITHUBACTIONS_DEPLOY_KEY"
+        cat > ~/.ssh/config <<'EOF'
+        Host github.com
+          IdentityFile ~/.ssh/id_ed25519
+          IdentitiesOnly yes
+          StrictHostKeyChecking yes
+        EOF
+        chmod 600 ~/.ssh/config
         git remote set-url origin git@github.com:${{ github.repository }}.git
     - name: Regenerate THIRD_PARTY_LICENSES.md
       run: ./.tools/show-third-party-licenses.sh > THIRD_PARTY_LICENSES.md
