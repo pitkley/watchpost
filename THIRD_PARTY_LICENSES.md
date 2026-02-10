@@ -423,11 +423,11 @@ Find a list of packages below
 - License: MIT
 - Compatible: True
 
-### pytest-8.4.2
+### pytest-9.0.2
 
 - HomePage: UNKNOWN
 - Author: Holger Krekel, Bruno Oliveira, Ronny Pfannschmidt, Floris Bruynooghe, Brianna Laugher, Florian Bruhin, Others (See AUTHORS)
-- License: MIT LICENSE
+- License: MIT
 - Compatible: True
 
 ### python-dateutil-2.9.0.post0
