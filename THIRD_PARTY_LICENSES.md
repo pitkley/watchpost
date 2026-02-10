@@ -234,7 +234,7 @@ Find a list of packages below
 - License: BSD LICENSE
 - Compatible: True
 
-### lefthook-1.13.6
+### lefthook-2.0.15
 
 - HomePage: https://github.com/evilmartians/lefthook
 - Author: Evil Martians
