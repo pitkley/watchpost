@@ -10,6 +10,20 @@
   "gitIgnoredAuthors": [
     "41898282+github-actions[bot]@users.noreply.github.com"
   ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": [
+        "^\\.github/workflows/docker\\.yml$"
+      ],
+      "matchStrings": [
+        "CHECKMK_VERSION:\\s*\"?(?<currentValue>[^\"\\s]+)\"?"
+      ],
+      "depNameTemplate": "checkmk/check-mk-raw",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)p(?<build>\\d+)$"
+    }
+  ],
   "prConcurrentLimit": 5,
   "packageRules": [
     {
@@ -20,7 +34,8 @@
         "checkmk/check-mk-raw"
       ],
       "matchFileNames": [
-        "checkmk-integration/Dockerfile.checkmk"
+        "checkmk-integration/Dockerfile.checkmk",
+        ".github/workflows/docker.yml"
       ],
       "allowedVersions": "/^\\d+\\.\\d+\\.\\d+p\\d+$/",
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)p(?<build>\\d+)$",
