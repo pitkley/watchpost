@@ -458,7 +458,7 @@ Find a list of packages below
 - License: MIT
 - Compatible: True
 
-### redis-7.1.1
+### redis-7.2.0
 
 - HomePage: UNKNOWN
 - Author: UNKNOWN
