@@ -39,7 +39,7 @@ cli = [
     "rich>=14.1.0,<15.0.0",
 ]
 redis = [
-    "redis>=7.1.0,<7.2.0",
+    "redis>=7.2.0,<7.3.0",
 ]
 
 [project.scripts]
