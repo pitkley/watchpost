@@ -40,7 +40,7 @@ def test_correct_summary_is_used():
     check_result = r.to_check_result()
     assert check_result.check_state == CheckState.CRIT
     assert check_result.summary == "FAIL"
-    assert check_result.details == "OK - 1\n\nCRIT\n\nOK - 2"
+    assert check_result.details == "OK - 1 (.)\n\nCRIT (!!)\n\nOK - 2 (.)"
 
 
 def test_crit_trumps_unknown():

@@ -477,7 +477,7 @@ class OngoingCheckResult:
         def __str__(self) -> str:
             if self.details:
                 return f"{self.summary} {self.check_state.state_marker}:\n{normalize_details(self.details)}\n"
-            return f"{self.summary}\n"
+            return f"{self.summary} {self.check_state.state_marker}\n"
 
     def __init__(
         self,
