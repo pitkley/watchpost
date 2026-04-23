@@ -234,11 +234,11 @@ Find a list of packages below
 - License: BSD LICENSE
 - Compatible: True
 
-### lefthook-2.0.15
+### lefthook-2.1.6
 
-- HomePage: https://github.com/evilmartians/lefthook
-- Author: Evil Martians
-- License: MIT LICENSE
+- HomePage: UNKNOWN
+- Author: UNKNOWN
+- License: MIT
 - Compatible: True
 
 ### license-expression-30.4.4
