@@ -7,7 +7,7 @@ on:
     - main
 
 env:
-  CHECKMK_VERSION: "2.4.0p25"
+  CHECKMK_VERSION: "2.4.0p30"
 
 jobs:
   cmk-docker-build:
