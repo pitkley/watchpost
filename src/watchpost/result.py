@@ -76,6 +76,26 @@ def normalize_details(details: Details | None) -> str | None:
 
 
 @dataclass
+class Boundaries:
+    """
+    Represents boundary values with lower and upper levels for a metric's graph
+    axis.
+
+    This maps to the Checkmk concept of boundaries exactly and thus directly
+    relates to metrics, see the `Metric` class.
+    """
+
+    lower: int | float | None = None
+    upper: int | float | None = None
+
+    def to_json_compatible_dict(self) -> dict[str, int | float | None]:
+        return {
+            "lower": self.lower,
+            "upper": self.upper,
+        }
+
+
+@dataclass
 class Thresholds:
     """
     Represents threshold values with warning and critical levels.
@@ -105,7 +125,10 @@ class Metric:
     name: str
     value: int | float
     levels: Thresholds | None = None
-    boundaries: Thresholds | None = None
+    # NOTE: use of `Thresholds` on boundaries is deprecated. On the next
+    # breaking-change bump we should drop this type from support, including the
+    # compatibility code in `to_json_compatible_dict` below.
+    boundaries: Thresholds | Boundaries | None = None
 
     def to_json_compatible_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -115,6 +138,14 @@ class Metric:
         if self.levels is not None:
             result["levels"] = self.levels.to_json_compatible_dict()
         if self.boundaries is not None:
+            # NOTE: use of `Thresholds` on boundaries is deprecated, see also
+            # the note on the `self.boundaries` field above.
+            if isinstance(self.boundaries, Thresholds):
+                self.boundaries = Boundaries(
+                    lower=self.boundaries.warning,
+                    upper=self.boundaries.critical,
+                )
+
             result["boundaries"] = self.boundaries.to_json_compatible_dict()
         return result
 
