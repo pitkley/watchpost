@@ -125,7 +125,7 @@ def check_function(item: str, section: Section) -> CheckResult:
 
     yield Result(
         state=check["check_state"],
-        summary=check["summary"],
+        summary=sanitize_summary(check["summary"]),
         details=check["details"],
     )
 
