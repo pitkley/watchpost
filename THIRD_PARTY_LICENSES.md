@@ -423,10 +423,10 @@ Find a list of packages below
 - License: MIT
 - Compatible: True
 
-### pytest-9.0.2
+### pytest-9.1.1
 
 - HomePage: UNKNOWN
-- Author: Holger Krekel, Bruno Oliveira, Ronny Pfannschmidt, Floris Bruynooghe, Brianna Laugher, Florian Bruhin, Others (See AUTHORS)
+- Author: Brianna Laugher, Bruno Oliveira, Floris Bruynooghe, Freya Bruhin, Holger Krekel, Others (See AUTHORS), Ronny Pfannschmidt
 - License: MIT
 - Compatible: True
 
