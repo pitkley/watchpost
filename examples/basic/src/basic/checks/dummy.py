@@ -26,7 +26,7 @@ from .. import ENVIRONMENT_TEST
 
 
 @check(
-    name="dummy",
+    name="discovered dummy",
     service_labels={"foo": "bar"},
     environments=[ENVIRONMENT_TEST],
     cache_for=None,
