@@ -361,7 +361,7 @@ class DetectImpossibleCombinationStrategy(SchedulingStrategy):
         #
         # We aggregate all MustRunAgainstGivenTargetEnvironmentStrategy constraints and
         # compare their intersection to the set of environments declared in the @check
-        # decorator. They must be identical; otherwise the check declares to target
+        # decorator. The intersection must contain the declared targets; otherwise it targets
         # environments that not all strategies support.
         # Example: Check targets [Monitoring, Preprod] but one datasource only allows [Preprod].
         overlapping_target_environments: set[Environment] | None = None
@@ -384,14 +384,15 @@ class DetectImpossibleCombinationStrategy(SchedulingStrategy):
         # overlap — because current_execution_environment == target_environment at runtime.
         # If there's no overlap, the check can never be scheduled anywhere.
         # Example: execution must be Monitoring, target must be Preprod -> impossible.
-        if must_run_in_current_execution_environment:
-            if overlapping_execution_environments and overlapping_target_environments:
-                if not overlapping_execution_environments.intersection(
-                    overlapping_target_environments
-                ):
-                    raise InvalidCheckConfiguration(
-                        check,
-                        "Current=Target requirement cannot be satisfied: allowed execution environments and allowed target environments have no overlap (e.g., execution must be 'Monitoring' while target must be 'Preprod').",
-                    )
+        if (
+            must_run_in_current_execution_environment
+            and overlapping_execution_environments is not None
+            and overlapping_execution_environments.isdisjoint(check.environments)
+        ):
+            raise InvalidCheckConfiguration(
+                check,
+                "Current=Target requirement cannot be satisfied: allowed execution "
+                "environments and declared target environments have no overlap.",
+            )
 
         return SchedulingDecision.SCHEDULE
