@@ -151,7 +151,7 @@ def test_expand_by_hostname_multiple_hostnames(
         assert len(host1_results) == 2
         assert len(host2_results) == 2
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_expand_by_hostname_preserves_all_fields(
@@ -212,7 +212,7 @@ def test_expand_by_hostname_empty_list(
         # With empty hostname list, cartesian product yields empty list
         assert len(results) == 0
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 # Unit Tests for expand_by_name_suffix
@@ -352,7 +352,7 @@ def test_composition_hostname_then_suffix(
         actual = {(r.piggyback_host, r.service_name) for r in final_results}
         assert actual == expected
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_composition_suffix_then_hostname(
@@ -388,7 +388,7 @@ def test_composition_suffix_then_hostname(
         actual = {(r.piggyback_host, r.service_name) for r in final_results}
         assert actual == expected
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_composition_multiple_handlers(
@@ -443,9 +443,10 @@ def test_composition_multiple_handlers(
         result = final_results[0]
         assert result.piggyback_host == "host1"
         assert result.service_name == "test-service:suffix"
+        assert result.details is not None
         assert "[custom marker]" in result.details
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 # Tests for Check.apply_error_handlers
@@ -535,7 +536,7 @@ def test_apply_error_handlers_single_handler(
         assert results[0].piggyback_host == "new-host"
         assert results[0].service_name == mock_execution_result.service_name
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_apply_error_handlers_multiple_handlers(
@@ -584,7 +585,7 @@ def test_apply_error_handlers_multiple_handlers(
         actual = {(r.piggyback_host, r.service_name) for r in results}
         assert actual == expected
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 # Tests for @check Decorator Integration
@@ -634,7 +635,7 @@ def test_check_decorator_with_error_handlers(
         assert len(results) == 2
         assert {r.piggyback_host for r in results} == {"host1", "host2"}
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_check_decorator_without_error_handlers(test_environment: Environment) -> None:
@@ -723,6 +724,7 @@ def test_custom_error_handler(
     assert len(results) == 1
     result = results[0]
     assert result.check_state == CheckState.UNKNOWN
+    assert result.details is not None
     assert "[custom error handler applied]" in result.details
     # Other fields preserved
     assert result.piggyback_host == mock_execution_result.piggyback_host
@@ -831,13 +833,13 @@ def test_handler_preserves_environment_name(
         for result in results:
             assert result.environment_name == test_environment.name
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_expand_by_hostname_with_different_strategies(
     test_environment: Environment,
 ) -> None:
-    """Test that hostname resolution applies check hostname strategy to explicit hostnames."""
+    """Explicit error-handler hostnames take precedence over check strategies."""
 
     @check(
         name="test_service",
@@ -865,10 +867,9 @@ def test_expand_by_hostname_with_different_strategies(
 
     results = test_check_func.apply_error_handlers(test_environment, result)
 
-    # expand_by_hostname applies the check's hostname strategy to the explicit hostname
-    # "host1" with strategy "check-{service_name}" becomes "check-test-service"
+    # The explicit host must not be overwritten by the check-level template.
     assert len(results) == 1
-    assert results[0].piggyback_host == "check-test-service"
+    assert results[0].piggyback_host == "host1"
 
 
 # Performance and Scale Tests
@@ -908,6 +909,7 @@ def test_many_hostnames_many_suffixes(
         input_results = [mock_execution_result] * 5
 
         # Apply hostname handler (5 x 10 = 50 results)
+        assert mock_check.error_handlers is not None
         hostname_handler = mock_check.error_handlers[0]
         hostname_results = hostname_handler(mock_check, test_environment, input_results)
         assert len(hostname_results) == 50
@@ -921,7 +923,7 @@ def test_many_hostnames_many_suffixes(
         assert len({r.piggyback_host for r in final_results}) == 10  # 10 unique hosts
         assert len({r.service_name for r in final_results}) == 10  # 10 unique suffixes
     finally:
-        watchpost.check.current_app = original_app
+        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_deep_handler_chain(
@@ -979,4 +981,5 @@ def test_deep_handler_chain(
     # All handlers should have been applied (markers accumulated)
     result = results[0]
     for i in range(10):
+        assert result.details is not None
         assert f"[h{i}]" in result.details
