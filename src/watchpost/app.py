@@ -425,26 +425,17 @@ class Watchpost:
         Provide a context where the current Watchpost instance is active.
 
         This sets the global context variable so helper utilities can access the
-        current application instance during check execution.
+        current application instance during check execution. Nested contexts activate
+        their own application and restore the previous one on exit.
 
         Returns:
             The current `Watchpost` instance via a context manager.
         """
+        token = _cv.set(self)
         try:
-            _cv.get()
-        except LookupError:
-            # We only set the global context variable if it is not already set.
-            _token = _cv.set(self)
-            try:
-                yield self
-            finally:
-                _cv.reset(_token)
-        else:
-            # Yielding here (not in the try block) ensures we only catch
-            # `LookupError` from `_cv.get()`, not from code that runs during
-            # yield. (A `try` falls through to an `else` if no exception was
-            # caught.)
             yield self
+        finally:
+            _cv.reset(token)
 
     def register_datasource(
         self,
@@ -1093,8 +1084,8 @@ class Watchpost:
         Yields:
             `ExecutionResult` objects produced by the check for each environment.
         """
-        with self.app_context():
-            for environment in check.environments:
+        for environment in check.environments:
+            with self.app_context():
                 key = (check.identity, environment.name)
                 with self._poll_lock:
                     lock = self._poll_locks.setdefault(key, threading.RLock())
@@ -1109,8 +1100,8 @@ class Watchpost:
                         custom_executor=custom_executor,
                         use_cache=use_cache,
                     )
-                if execution_results:
-                    yield from execution_results
+            if execution_results:
+                yield from execution_results
 
     def run_checks(self, act_as_agent: bool = True) -> Generator[bytes]:
         """
@@ -1131,15 +1122,16 @@ class Watchpost:
             Bytes in Checkmk agent format.
         """
         self.verify_check_scheduling()
+        if act_as_agent:
+            yield from self._generate_checkmk_agent_output()
+
+        for check in self.checks:
+            for execution_result in self.run_check(check):
+                yield from execution_result.generate_checkmk_output()
+
         with self.app_context():
-            if act_as_agent:
-                yield from self._generate_checkmk_agent_output()
-
-            for check in self.checks:
-                for execution_result in self.run_check(check):
-                    yield from execution_result.generate_checkmk_output()
-
-            yield from self._generate_synthetic_result_outputs()
+            synthetic_output = list(self._generate_synthetic_result_outputs())
+        yield from synthetic_output
 
     def run_checks_once(self, act_as_agent: bool = True) -> None:
         """
