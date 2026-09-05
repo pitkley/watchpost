@@ -27,13 +27,17 @@ from __future__ import annotations
 import functools
 import hashlib
 import inspect
+import os
 import pickle
+import tempfile
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, cast
+
+from ._file_lock import exclusive_lock
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -275,6 +279,11 @@ class DiskStorage(Storage):
     A disk-backed storage backend using Pickle-serialized `CacheEntry` objects.
 
     Entries are stored under a versioned directory and sharded by a hash prefix.
+    Writes replace complete files atomically. Missing, corrupt, or incompatible
+    entries are cache misses. As with all pickle storage, the directory must be
+    trusted. Short publication and expiry transactions use advisory filesystem
+    locks across threads and processes. Empty shard directories and their lock
+    files are retained to avoid racing with writers.
     """
 
     def __init__(self, directory: str):
@@ -295,18 +304,18 @@ class DiskStorage(Storage):
         prefix = key_hash[:2]
         return self.directory / f"v{CacheEntry.VERSION}" / prefix / key_hash
 
-    @staticmethod
-    def _remove_empty_directories(file_path: Path) -> None:
-        try:
-            file_path.parent.rmdir()
-            file_path.parent.parent.rmdir()
-        except OSError:
-            pass
-
     def _remove_cache_entry_on_disk(self, cache_entry: CacheEntry) -> None:
         file_path = self._get_file_path(cache_entry.cache_key)
-        file_path.unlink()
-        self._remove_empty_directories(file_path)
+        with exclusive_lock(file_path.parent / ".publication.lock"):
+            file_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _read_entry(file_path: Path, cache_key: CacheKey) -> CacheEntry[T] | None:
+        with file_path.open("rb") as file:
+            entry: CacheEntry[T] = pickle.load(file)
+        if not isinstance(entry, CacheEntry) or entry.cache_key != cache_key:
+            return None
+        return entry
 
     def get(
         self,
@@ -314,19 +323,33 @@ class DiskStorage(Storage):
         return_expired: bool = False,
     ) -> CacheEntry[T] | None:
         file_path = self._get_file_path(cache_key)
-        if not file_path.exists():
-            return None
-
-        with file_path.open("rb") as file:
-            cache_entry: CacheEntry[T] = pickle.load(file)
-
-        if cache_entry.is_expired():
-            self._remove_cache_entry_on_disk(cache_entry)
-            if return_expired:
+        try:
+            cache_entry: CacheEntry[T] | None = self._read_entry(file_path, cache_key)
+            if cache_entry is None:
+                return None
+            if not cache_entry.is_expired():
                 return cache_entry
+            # Re-read under the same lock writers use for replacement. A fresh
+            # value may have been published since the optimistic read above.
+            with exclusive_lock(file_path.parent / ".publication.lock"):
+                cache_entry = self._read_entry(file_path, cache_key)
+                if cache_entry is None:
+                    return None
+                if not cache_entry.is_expired():
+                    return cache_entry
+                file_path.unlink(missing_ok=True)
+                return cache_entry if return_expired else None
+        except (
+            OSError,
+            EOFError,
+            pickle.UnpicklingError,
+            AttributeError,
+            ImportError,
+            ValueError,
+            TypeError,
+        ):
+            # Do not unlink here: a writer may already have replaced the bad file.
             return None
-
-        return cache_entry
 
     def store(
         self,
@@ -334,8 +357,20 @@ class DiskStorage(Storage):
     ) -> None:
         file_path = self._get_file_path(entry.cache_key)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        with file_path.open("wb") as file:
-            pickle.dump(entry, file)
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=file_path.parent, prefix=".watchpost-", delete=False
+            ) as file:
+                temporary_path = Path(file.name)
+                pickle.dump(entry, file)
+                file.flush()
+                os.fsync(file.fileno())
+            with exclusive_lock(file_path.parent / ".publication.lock"):
+                os.replace(temporary_path, file_path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
 
 class RedisStorage(Storage):
