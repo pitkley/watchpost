@@ -132,6 +132,7 @@ class CheckExecutor[T]:
         self,
         max_workers: int | None = None,
     ):
+        self._lock = threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self._state: dict[Hashable, _KeyState[T]] = {}
         self._asyncio_loop_thread: AsyncioLoopThread | None = None
@@ -145,12 +146,13 @@ class CheckExecutor[T]:
             The event loop used to run coroutine functions submitted to this
             executor.
         """
-        if not self._asyncio_loop_thread:
-            self._asyncio_loop_thread = AsyncioLoopThread(daemon=True)
-            self._asyncio_loop_thread.start()
-            self._asyncio_loop_thread.loop_started.wait()
+        with self._lock:
+            if not self._asyncio_loop_thread:
+                self._asyncio_loop_thread = AsyncioLoopThread(daemon=True)
+                self._asyncio_loop_thread.start()
+                self._asyncio_loop_thread.loop_started.wait()
 
-        return cast(asyncio.AbstractEventLoop, self._asyncio_loop_thread.loop)
+            return cast(asyncio.AbstractEventLoop, self._asyncio_loop_thread.loop)
 
     def __enter__(self) -> CheckExecutor[T]:
         return self
@@ -210,31 +212,38 @@ class CheckExecutor[T]:
         Returns:
             A Future representing the running or already existing job.
         """
-        key_state = self._state.setdefault(key, _KeyState())
+        with self._lock:
+            key_state = self._state.setdefault(key, _KeyState())
 
-        if not resubmit and key_state.active_futures:
-            # One or more jobs for this key are already running. We don't want
-            # to start another one, so we return the first existing future.
-            return key_state.active_futures[0]
+            if not resubmit and key_state.active_futures:
+                # One or more jobs for this key are already running. We don't want
+                # to start another one, so we return the first existing future.
+                return key_state.active_futures[0]
 
-        logger.debug("Submitting future for key %s", key)
-        if inspect.iscoroutinefunction(func) or inspect.iscoroutinefunction(func):
-            future = asyncio.run_coroutine_threadsafe(
-                func(*args, **kwargs),  # type: ignore[invalid-argument-type]
-                self.asyncio_loop,
-            )
-        else:
-            future = self.executor.submit(func, *args, **kwargs)
-        key_state.active_futures.append(future)
-        future.add_done_callback(lambda future: self._done_callback(key, future))
-        return future
+            logger.debug("Submitting future for key %s", key)
+            if inspect.iscoroutinefunction(func):
+                future = asyncio.run_coroutine_threadsafe(
+                    func(*args, **kwargs),  # type: ignore[invalid-argument-type]
+                    self.asyncio_loop,
+                )
+            else:
+                future = self.executor.submit(func, *args, **kwargs)
+            key_state.active_futures.append(future)
+            future.add_done_callback(lambda future: self._done_callback(key, future))
+            return future
 
-    def _done_callback(self, key: Hashable, future: Future[T]) -> None:
-        if key_state := self._state.get(key):
-            logger.debug("Future %s completed successfully", key)
-            key_state.finished_futures.append(future)
-        else:
-            logger.warning("Future %s completed after state cleanup", key)
+    def _done_callback(self, key: Hashable, _future: Future[T]) -> None:
+        with self._lock:
+            if key_state := self._state.get(key):
+                self._collect_finished(key_state)
+
+    @staticmethod
+    def _collect_finished(key_state: _KeyState[T]) -> None:
+        # A Future becomes done before its callbacks run. Refresh from the
+        # futures themselves so result()/statistics() never lag completion.
+        for future in key_state.active_futures:
+            if future.done() and future not in key_state.finished_futures:
+                key_state.finished_futures.append(future)
 
     def result(self, key: Hashable) -> T | None:
         """
@@ -255,27 +264,30 @@ class CheckExecutor[T]:
             KeyError:
                 If no job for the given key has been submitted.
         """
-        key_state = self._state.get(key)
+        with self._lock:
+            key_state = self._state.get(key)
+            if key_state:
+                self._collect_finished(key_state)
 
-        if not key_state or not key_state.finished_futures:
-            if not key_state or not key_state.active_futures:
-                # No future for the key has been submitted at all.
-                raise KeyError(key) from None
+            if not key_state or not key_state.finished_futures:
+                if not key_state or not key_state.active_futures:
+                    # No future for the key has been submitted at all.
+                    raise KeyError(key) from None
 
-            # No future for the key has finished yet, returning no result.
-            return None
+                # No future for the key has finished yet, returning no result.
+                return None
 
-        finished_future = key_state.finished_futures.popleft()
-        try:
-            key_state.active_futures.remove(finished_future)
-        except ValueError:
-            pass
+            finished_future = key_state.finished_futures.popleft()
+            try:
+                key_state.active_futures.remove(finished_future)
+            except ValueError:
+                pass
 
-        if not key_state.active_futures:
-            assert len(key_state.finished_futures) == 0
-            del self._state[key]
+            if not key_state.active_futures:
+                assert len(key_state.finished_futures) == 0
+                del self._state[key]
 
-        return finished_future.result()
+            return finished_future.result()
 
     def statistics(self) -> CheckExecutor.Statistics:
         """
@@ -285,29 +297,31 @@ class CheckExecutor[T]:
             A `CheckExecutor.Statistics` instance summarizing total, completed,
             errored, running, and awaiting pickup futures.
         """
-        total = 0
-        completed = 0
-        errored = 0
+        with self._lock:
+            total = 0
+            completed = 0
+            errored = 0
 
-        for key_state in self._state.values():
-            total += len(key_state.active_futures)
-            for finished_future in key_state.finished_futures:
-                assert finished_future.done()
-                if finished_future.exception():
-                    errored += 1
-                else:
-                    completed += 1
+            for key_state in self._state.values():
+                self._collect_finished(key_state)
+                total += len(key_state.active_futures)
+                for finished_future in key_state.finished_futures:
+                    assert finished_future.done()
+                    if finished_future.exception():
+                        errored += 1
+                    else:
+                        completed += 1
 
-        awaiting_pickup = completed + errored
-        running = total - awaiting_pickup
+            awaiting_pickup = completed + errored
+            running = total - awaiting_pickup
 
-        return CheckExecutor.Statistics(
-            total=total,
-            completed=completed,
-            errored=errored,
-            running=running,
-            awaiting_pickup=awaiting_pickup,
-        )
+            return CheckExecutor.Statistics(
+                total=total,
+                completed=completed,
+                errored=errored,
+                running=running,
+                awaiting_pickup=awaiting_pickup,
+            )
 
     def errored(self) -> dict[str, str]:
         """
@@ -318,13 +332,15 @@ class CheckExecutor[T]:
             exception message of futures that completed with an error and have
             not yet been picked up via `result()`.
         """
-        errors = {}
-        for key, key_state in self._state.items():
-            for future in key_state.finished_futures:
-                if (exception := future.exception()) is not None:
-                    errors[str(key)] = str(exception)
+        with self._lock:
+            errors = {}
+            for key, key_state in self._state.items():
+                self._collect_finished(key_state)
+                for future in key_state.finished_futures:
+                    if (exception := future.exception()) is not None:
+                        errors[str(key)] = str(exception)
 
-        return errors
+            return errors
 
 
 class BlockingCheckExecutor[T](CheckExecutor[T]):
@@ -363,5 +379,7 @@ class BlockingCheckExecutor[T](CheckExecutor[T]):
             The completed result value, or None if no finished results are
             queued after waiting.
         """
-        wait(self._state[key].active_futures, return_when="ALL_COMPLETED")
+        with self._lock:
+            futures = list(self._state[key].active_futures)
+        wait(futures, return_when="ALL_COMPLETED")
         return super().result(key)

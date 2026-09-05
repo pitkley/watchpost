@@ -14,8 +14,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
-from threading import Event
+from threading import Barrier, Event
 
 import pytest
 
@@ -322,3 +324,66 @@ def test_errored_reports_and_clears_after_pickup():
         executor.result("key-err")
 
     assert executor.errored() == {}
+
+
+def test_concurrent_submissions_share_one_future(monkeypatch):
+    gate = Barrier(16)
+    with CheckExecutor(max_workers=1) as executor:
+        original_submit = executor.executor.submit
+
+        def slow_submit(*args, **kwargs):
+            # Widen the check/submit race while callers synchronize at the gate.
+            time.sleep(0.02)
+            return original_submit(*args, **kwargs)
+
+        monkeypatch.setattr(executor.executor, "submit", slow_submit)
+
+        def submit():
+            gate.wait(timeout=5)
+            return executor.submit("same", lambda: 42)
+
+        with ThreadPoolExecutor(16) as callers:
+            futures = list(callers.map(lambda _: submit(), range(16)))
+        assert all(future is futures[0] for future in futures)
+        assert futures[0].result(5) == 42
+        assert executor.result("same") == 42
+        assert executor.statistics().total == 0
+
+
+def test_concurrent_async_loop_startup_returns_ready_loop(monkeypatch):
+    import asyncio
+
+    gate = Barrier(8)
+    original_new_loop = asyncio.new_event_loop
+
+    def slow_new_loop():
+        time.sleep(0.02)
+        return original_new_loop()
+
+    monkeypatch.setattr(asyncio, "new_event_loop", slow_new_loop)
+    with CheckExecutor() as executor:
+
+        def get_loop():
+            gate.wait(timeout=5)
+            return executor.asyncio_loop
+
+        with ThreadPoolExecutor(8) as callers:
+            loops = list(callers.map(lambda _: get_loop(), range(8)))
+        assert loops[0] is not None
+        assert all(loop is loops[0] for loop in loops)
+
+
+def test_pickup_and_diagnostics_observe_completion_before_callback():
+    from concurrent.futures import Future
+
+    from watchpost.executor import _KeyState
+
+    executor = CheckExecutor()
+    future = Future()
+    executor._state["done"] = _KeyState(active_futures=[future])
+    future.set_result(42)
+    assert executor.statistics().completed == 1
+    assert executor.result("done") == 42
+    # A late callback must not restore a consumed future.
+    executor._done_callback("done", future)
+    assert executor.statistics().total == 0
