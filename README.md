@@ -119,6 +119,13 @@ can use `asyncio.timeout()` to bound a whole operation; synchronous checks shoul
 use their client's connect/read timeouts. A stuck check occupies its own pending
 slot instead of accumulating a new job on every poll.
 
+ASGI shutdown cancels pending async checks and queued thread jobs, then releases
+Watchpost's internally created executor. Running synchronous checks must finish
+using their own I/O timeouts. Executors supplied to `Watchpost(executor=...)` are
+caller-owned and must be closed by the caller. For standalone use, call
+`app.shutdown()` after finishing. Direct executor users can drain work with
+`shutdown(wait=True)` or request cancellation with `cancel_futures=True`.
+
 ## Documentation
 
 See [`./docs`](docs/) for more information.

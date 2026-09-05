@@ -1,4 +1,5 @@
 # Copyright 2025 TAKKT Industrial & Packaging GmbH
+# Copyright 2026 Pit Kleyersburg <pitkley@googlemail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -256,3 +257,34 @@ def test_routes_configuration():
     assert route_endpoints["/executor/statistics"] == "executor_statistics"
     assert route_endpoints["/executor/errored"] == "executor_errored"
     assert route_endpoints["/"] == "root"
+
+
+def test_lifespan_closes_owned_executor():
+    app = Watchpost(checks=[], execution_environment=TEST_ENVIRONMENT)
+    loop = app.executor.asyncio_loop
+    with TestClient(app) as client:
+        assert client.get("/healthcheck").status_code == 204
+    assert loop.is_closed()
+
+
+def test_lifespan_leaves_supplied_executor_to_caller():
+    with CheckExecutor() as executor:
+        app = Watchpost(
+            checks=[], execution_environment=TEST_ENVIRONMENT, executor=executor
+        )
+        with TestClient(app):
+            pass
+        assert executor.submit("still usable", lambda: 42).result(5) == 42
+
+
+def test_failed_startup_closes_owned_executor():
+    import pytest
+
+    app = Watchpost(checks=[], execution_environment=TEST_ENVIRONMENT)
+    loop = app.executor.asyncio_loop
+    with patch.object(
+        app, "verify_check_scheduling", side_effect=ValueError("invalid")
+    ):
+        with pytest.raises(ValueError, match="invalid"), TestClient(app):
+            pass
+    assert loop.is_closed()
