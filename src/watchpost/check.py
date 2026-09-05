@@ -46,7 +46,7 @@ import typing
 from collections.abc import Awaitable, Callable, Generator
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from ._capture import capture_output
 from .cache import Cache, CacheEntry, Storage
@@ -73,35 +73,15 @@ if TYPE_CHECKING:
 CheckFunctionResult = (
     CheckResult
     | OngoingCheckResult
+    | list[CheckResult]
+    | list[OngoingCheckResult]
     | list[CheckResult | OngoingCheckResult]
     | Generator[CheckResult | OngoingCheckResult]
 )
 
-_E = Environment
-_D = TypeVar("_D", bound=Datasource)
-_R = CheckFunctionResult | Awaitable[CheckFunctionResult]
-
-CheckFunction = (
-    Callable[[_D], _R]
-    | Callable[[_D, _D], _R]
-    | Callable[[_D, _D, _D], _R]
-    | Callable[[_D, _D, _D, _D], _R]
-    | Callable[[_D, _D, _D, _D, _D], _R]
-    | Callable[[_D, _D, _D, _D, _D, _D], _R]
-    | Callable[[_D, _D, _D, _D, _D, _D, _D], _R]
-    | Callable[[_D, _D, _D, _D, _D, _D, _D, _D], _R]
-    | Callable[[_D, _D, _D, _D, _D, _D, _D, _D, _D], _R]
-    | Callable[[_E, _D], _R]
-    | Callable[[_E, _D], _R]
-    | Callable[[_E, _D, _D], _R]
-    | Callable[[_E, _D, _D, _D], _R]
-    | Callable[[_E, _D, _D, _D, _D], _R]
-    | Callable[[_E, _D, _D, _D, _D, _D], _R]
-    | Callable[[_E, _D, _D, _D, _D, _D, _D], _R]
-    | Callable[[_E, _D, _D, _D, _D, _D, _D, _D], _R]
-    | Callable[[_E, _D, _D, _D, _D, _D, _D, _D, _D], _R]
-    | Callable[[_E, _D, _D, _D, _D, _D, _D, _D, _D, _D], _R]
-)
+# Datasource parameters may be heterogeneous, keyword-only, or absent. Their
+# injectable names and annotations are validated by Watchpost at runtime.
+CheckFunction = Callable[..., CheckFunctionResult | Awaitable[CheckFunctionResult]]
 
 
 class ErrorHandler(Protocol):
