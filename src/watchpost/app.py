@@ -36,6 +36,7 @@ import threading
 import traceback
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import replace
 from datetime import timedelta
 from types import EllipsisType, ModuleType
 from typing import (
@@ -178,7 +179,7 @@ class _InstantiableDatasource[D: Datasource, DF: DatasourceFactory]:
     def from_datasource(
         cls,
         datasource_type: type[D],
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> _InstantiableDatasource:
         """
         Create an instantiable wrapper for a concrete datasource type.
@@ -448,7 +449,7 @@ class Watchpost:
     def register_datasource(
         self,
         datasource_type: type[_D],
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> None:
         """
         Register a datasource type and its constructor arguments.
@@ -979,25 +980,25 @@ class Watchpost:
             and not check_results_cache_entry.is_expired()
         )
 
-        if should_update_cache or not can_reuse_results:
-            datasources = {
-                name: datasource.instance()
-                for name, datasource in instantiable_datasources.items()
-            }
-            executor.submit(
-                key=executor_key,
-                func=check.run_async if check.is_async else check.run_sync,
-                resubmit=False,
-                watchpost=self,
-                environment=environment,
-                datasources=datasources,
-            )
-
-        if can_reuse_results:
-            return check_results_cache_entry.value  # type: ignore[union-attr]
-
         check_has_errored = True
         try:
+            if should_update_cache or not can_reuse_results:
+                datasources = {
+                    name: datasource.instance()
+                    for name, datasource in instantiable_datasources.items()
+                }
+                executor.submit(
+                    key=executor_key,
+                    func=check.run_async if check.is_async else check.run_sync,
+                    resubmit=False,
+                    watchpost=self,
+                    environment=environment,
+                    datasources=datasources,
+                )
+
+            if can_reuse_results:
+                return check_results_cache_entry.value  # type: ignore[union-attr]
+
             maybe_execution_results = executor.result(key=executor_key)
             check_has_errored = False
 
@@ -1014,12 +1015,10 @@ class Watchpost:
         except DatasourceUnavailable as e:
             additional_details = f"\n\n{e!s}\n" + "".join(traceback.format_exception(e))
             if check_results_cache_entry and check_results_cache_entry.value:
-                for result in check_results_cache_entry.value:
-                    if result.details:
-                        result.details += additional_details
-                    else:
-                        result.details = additional_details
-                return check_results_cache_entry.value
+                return [
+                    replace(result, details=(result.details or "") + additional_details)
+                    for result in check_results_cache_entry.value
+                ]
 
             maybe_execution_results = check.apply_error_handlers(
                 environment,

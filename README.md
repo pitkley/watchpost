@@ -138,6 +138,11 @@ Watchpost results. The Checkmk plugin discovers one service for a duplicate
 identity and reports UNKNOWN with the conflicting results, instead of selecting
 one result and hiding the others. Use distinct names, result suffixes, or hosts.
 
+Datasource construction failures follow the same result policy as failures in
+check functions: `DatasourceUnavailable` produces UNKNOWN (or an available prior
+cached result with failure details), while other exceptions produce CRIT. Error
+handlers still expand those results, and unrelated checks continue running.
+
 ## Documentation
 
 See [`./docs`](docs/) for more information.
