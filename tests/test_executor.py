@@ -387,3 +387,63 @@ def test_pickup_and_diagnostics_observe_completion_before_callback():
     # A late callback must not restore a consumed future.
     executor._done_callback("done", future)
     assert executor.statistics().total == 0
+
+
+def test_shutdown_wait_drains_async_work_and_closes_loop():
+    import asyncio
+
+    finished = Event()
+
+    async def work():
+        await asyncio.sleep(0.01)
+        finished.set()
+        return 42
+
+    executor = CheckExecutor()
+    future = executor.submit("async", work)
+    loop = executor.asyncio_loop
+    executor.shutdown(wait=True)
+    assert finished.is_set()
+    assert future.result() == 42
+    assert loop.is_closed()
+    assert not executor._asyncio_loop_thread.is_alive()
+    executor.shutdown(wait=True)
+    with pytest.raises(RuntimeError, match="shut down"):
+        executor.submit("later", work)
+
+
+def test_shutdown_cancels_async_work_and_runs_finalizers():
+    import asyncio
+
+    started, finalized = Event(), Event()
+
+    async def work():
+        try:
+            started.set()
+            await asyncio.Event().wait()
+        finally:
+            finalized.set()
+
+    executor = CheckExecutor()
+    future = executor.submit("async", work)
+    assert started.wait(5)
+    loop = executor.asyncio_loop
+    executor.shutdown(wait=False, cancel_futures=True)
+    executor.shutdown(wait=True)
+    assert future.cancelled()
+    assert finalized.is_set()
+    assert loop.is_closed()
+    assert executor.statistics().errored == 1
+    assert executor.errored() == {"async": "Cancelled"}
+
+
+def test_async_loop_startup_failure_does_not_hang(monkeypatch):
+    import asyncio
+
+    def fail():
+        raise OSError("cannot create loop")
+
+    monkeypatch.setattr(asyncio, "new_event_loop", fail)
+    with CheckExecutor() as executor:
+        with pytest.raises(RuntimeError, match="Could not start"):
+            executor.asyncio_loop

@@ -29,6 +29,7 @@ Notes:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 import traceback
@@ -332,6 +333,7 @@ class Watchpost:
         )
         self.hostname_coerce_into_valid_hostname = hostname_coerce_into_valid_hostname
 
+        self._owns_executor = executor is None
         if executor:
             self.executor = executor
         else:
@@ -397,9 +399,22 @@ class Watchpost:
         This ensures checks are schedulable and hostnames can be resolved before
         serving requests.
         """
-        self.verify_check_scheduling()
-        self.verify_hostname_generation()
-        yield
+        try:
+            self.verify_check_scheduling()
+            self.verify_hostname_generation()
+            yield
+        finally:
+            await asyncio.to_thread(self.shutdown)
+
+    def shutdown(self, wait: bool = True) -> None:
+        """Release an internally created executor; supplied executors are caller-owned.
+
+        Cancel async/queued checks and wait for running synchronous checks when
+        ``wait=True``. Call this after standalone use; ASGI lifespan does so
+        automatically, including when startup validation fails.
+        """
+        if self._owns_executor:
+            self.executor.shutdown(wait=wait, cancel_futures=True)
 
     @contextmanager
     def app_context(self) -> Generator[Watchpost]:

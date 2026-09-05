@@ -30,7 +30,7 @@ import logging
 import threading
 from collections import deque
 from collections.abc import Awaitable, Callable, Hashable
-from concurrent.futures import Future, ThreadPoolExecutor, wait
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast, override
 
@@ -53,16 +53,31 @@ class AsyncioLoopThread(threading.Thread):
         super().__init__(*args, **kwargs)
         self.loop: asyncio.AbstractEventLoop | None = None
         self.loop_started = threading.Event()
+        self.startup_error: BaseException | None = None
 
     def run(self) -> None:
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-
-        self.loop_started.set()
-        self.loop.run_forever()
+        try:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+        except BaseException as error:
+            self.startup_error = error
+            if self.loop is not None:
+                try:
+                    self.loop.close()
+                finally:
+                    self.loop = None
+            return
+        finally:
+            self.loop_started.set()
+        try:
+            self.loop.run_forever()
+        finally:
+            self.loop.run_until_complete(self.loop.shutdown_asyncgens())
+            self.loop.run_until_complete(self.loop.shutdown_default_executor())
+            self.loop.close()
 
     def stop(self) -> None:
-        if self.loop:
+        if self.loop and not self.loop.is_closed():
             self.loop.call_soon_threadsafe(self.loop.stop)
 
 
@@ -136,6 +151,12 @@ class CheckExecutor[T]:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self._state: dict[Hashable, _KeyState[T]] = {}
         self._asyncio_loop_thread: AsyncioLoopThread | None = None
+        self._shutdown_thread: threading.Thread | None = None
+        self._shutdown_error: BaseException | None = None
+        self._async_futures: set[Future[T]] = set()
+        # Only the owning event-loop thread accesses this set. Unlike the
+        # concurrent futures, these tasks stay active through cancellation cleanup.
+        self._async_tasks: set[asyncio.Task[T]] = set()
 
     @property
     def asyncio_loop(self) -> asyncio.AbstractEventLoop:
@@ -147,11 +168,17 @@ class CheckExecutor[T]:
             executor.
         """
         with self._lock:
+            if self._shutdown_thread is not None:
+                raise RuntimeError("Executor has been shut down")
             if not self._asyncio_loop_thread:
                 self._asyncio_loop_thread = AsyncioLoopThread(daemon=True)
                 self._asyncio_loop_thread.start()
                 self._asyncio_loop_thread.loop_started.wait()
 
+            if self._asyncio_loop_thread.startup_error is not None:
+                raise RuntimeError(
+                    "Could not start async event loop"
+                ) from self._asyncio_loop_thread.startup_error
             return cast(asyncio.AbstractEventLoop, self._asyncio_loop_thread.loop)
 
     def __enter__(self) -> CheckExecutor[T]:
@@ -165,19 +192,77 @@ class CheckExecutor[T]:
     ) -> None:
         self.shutdown(wait=True)
 
-    def shutdown(self, wait: bool = False) -> None:
-        """
-        Shut down the executor and stop the background event loop.
+    def shutdown(self, wait: bool = False, *, cancel_futures: bool = False) -> None:
+        """Stop accepting jobs and release owned resources.
 
-        Parameters:
-            wait:
-                If true, waits for all running futures to finish before
-                returning. This is passed through to the underlying
-                `ThreadPoolExecutor.shutdown()`.
+        By default submitted work drains. With ``cancel_futures=True``, queued
+        thread work and async checks are cancelled; running Python threads must
+        finish themselves. ``wait=False`` performs cleanup in a background
+        thread; a later ``shutdown(wait=True)`` joins that same cleanup. The first
+        shutdown call determines cancellation policy. Do not wait for shutdown
+        from inside a check running on this executor.
         """
-        if self._asyncio_loop_thread:
-            self._asyncio_loop_thread.stop()
-        self.executor.shutdown(wait=wait)
+        with self._lock:
+            if wait and threading.current_thread() is self._asyncio_loop_thread:
+                raise RuntimeError("Cannot wait for shutdown from the executor loop")
+            if self._shutdown_thread is None:
+                futures = [
+                    future
+                    for state in self._state.values()
+                    for future in state.active_futures
+                ]
+                self._shutdown_thread = threading.Thread(
+                    target=self._close_resources,
+                    args=(futures, cancel_futures),
+                    daemon=True,
+                    name="watchpost-shutdown",
+                )
+                self._shutdown_thread.start()
+            shutdown_thread = self._shutdown_thread
+        if wait:
+            shutdown_thread.join()
+            if self._shutdown_error is not None:
+                raise RuntimeError("Executor cleanup failed") from self._shutdown_error
+
+    def _close_resources(self, futures: list[Future[T]], cancel_futures: bool) -> None:
+        try:
+            if cancel_futures:
+                with self._lock:
+                    async_futures = tuple(self._async_futures)
+                for future in async_futures:
+                    future.cancel()
+            self.executor.shutdown(wait=True, cancel_futures=cancel_futures)
+            for future in futures:
+                try:
+                    future.result()
+                except BaseException:
+                    # Check errors belong to result pickup, not shutdown.
+                    pass
+            loop_thread = self._asyncio_loop_thread
+            if loop_thread and loop_thread.loop and not loop_thread.loop.is_closed():
+
+                async def cancel_remaining() -> None:
+                    # Cancelling a concurrent future reports completion before
+                    # its asyncio task finishes. Let checks finish their awaited
+                    # finalizers before cancelling any orphaned child tasks.
+                    if self._async_tasks:
+                        await asyncio.gather(
+                            *tuple(self._async_tasks), return_exceptions=True
+                        )
+                    pending = asyncio.all_tasks() - {asyncio.current_task()}
+                    for task in pending:
+                        if not task.cancelling():
+                            task.cancel()
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
+
+                asyncio.run_coroutine_threadsafe(
+                    cancel_remaining(), loop_thread.loop
+                ).result()
+                loop_thread.stop()
+                loop_thread.join()
+        except BaseException as error:
+            self._shutdown_error = error
 
     def submit[**P](  # type: ignore[valid-type]
         self,
@@ -213,6 +298,8 @@ class CheckExecutor[T]:
             A Future representing the running or already existing job.
         """
         with self._lock:
+            if self._shutdown_thread is not None:
+                raise RuntimeError("Executor has been shut down")
             key_state = self._state.setdefault(key, _KeyState())
 
             if not resubmit and key_state.active_futures:
@@ -222,18 +309,33 @@ class CheckExecutor[T]:
 
             logger.debug("Submitting future for key %s", key)
             if inspect.iscoroutinefunction(func):
+                loop = self.asyncio_loop
+
+                async def invoke() -> T:
+                    task = asyncio.current_task()
+                    assert task is not None
+                    self._async_tasks.add(task)
+                    try:
+                        return await cast(Awaitable[T], func(*args, **kwargs))
+                    finally:
+                        self._async_tasks.discard(task)
+
                 future = asyncio.run_coroutine_threadsafe(
-                    func(*args, **kwargs),  # type: ignore[invalid-argument-type]
-                    self.asyncio_loop,
+                    invoke(),
+                    loop,
                 )
+                self._async_futures.add(future)
             else:
-                future = self.executor.submit(func, *args, **kwargs)
+                future = self.executor.submit(
+                    cast(Callable[P, T], func), *args, **kwargs
+                )
             key_state.active_futures.append(future)
             future.add_done_callback(lambda future: self._done_callback(key, future))
             return future
 
-    def _done_callback(self, key: Hashable, _future: Future[T]) -> None:
+    def _done_callback(self, key: Hashable, future: Future[T]) -> None:
         with self._lock:
+            self._async_futures.discard(future)
             if key_state := self._state.get(key):
                 self._collect_finished(key_state)
 
@@ -307,7 +409,7 @@ class CheckExecutor[T]:
                 total += len(key_state.active_futures)
                 for finished_future in key_state.finished_futures:
                     assert finished_future.done()
-                    if finished_future.exception():
+                    if finished_future.cancelled() or finished_future.exception():
                         errored += 1
                     else:
                         completed += 1
@@ -337,7 +439,9 @@ class CheckExecutor[T]:
             for key, key_state in self._state.items():
                 self._collect_finished(key_state)
                 for future in key_state.finished_futures:
-                    if (exception := future.exception()) is not None:
+                    if future.cancelled():
+                        errors[str(key)] = "Cancelled"
+                    elif (exception := future.exception()) is not None:
                         errors[str(key)] = str(exception)
 
             return errors
@@ -381,5 +485,17 @@ class BlockingCheckExecutor[T](CheckExecutor[T]):
         """
         with self._lock:
             futures = list(self._state[key].active_futures)
-        wait(futures, return_when="ALL_COMPLETED")
+        for future in futures:
+            completed = threading.Event()
+
+            def signal_completion(
+                _future: Future[T], event: threading.Event = completed
+            ) -> None:
+                event.set()
+
+            future.add_done_callback(signal_completion)
+            # Future cancellation invokes callbacks even before a worker can
+            # acknowledge it. Waiting on completion also keeps caller interrupts
+            # separate from check exceptions, which pickup below delivers.
+            completed.wait()
         return super().result(key)
