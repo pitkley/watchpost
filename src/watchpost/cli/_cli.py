@@ -18,6 +18,7 @@
 from collections.abc import Iterable
 
 import click  # type: ignore
+from click.exceptions import Exit
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
@@ -132,7 +133,6 @@ def verify_check_configuration(app: Watchpost) -> None:
 
     try:
         app.verify_check_scheduling()
-        console.print("Check configurations verified.")
     except ExceptionGroup as exception_group:
         for exception in exception_group.exceptions:
             if not isinstance(exception, InvalidCheckConfiguration):
@@ -165,6 +165,8 @@ def verify_check_configuration(app: Watchpost) -> None:
 
     if table.rows:
         console.print(table)
+        raise Exit(1)
+    console.print("Check configurations verified.")
 
 
 @cli.command()  # type: ignore[misc]
