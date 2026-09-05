@@ -104,6 +104,21 @@ INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 * ASGI / HTTP
     * Starlette app; routes: `/`, `/healthcheck`, `/executor/statistics`, `/executor/errored`
 
+## Execution and timeouts
+
+HTTP polls share one outstanding execution per check and target environment,
+including checks with `cache_for=None`. A completed result remains available
+until pickup; the following poll can start a fresh execution. Caching controls
+how long picked-up results are reused, independently of overlap prevention.
+For a fixed application, pending work is bounded by its check/environment pairs.
+Direct users of `CheckExecutor.submit(resubmit=True)` explicitly opt into overlap.
+
+Checks must configure timeouts on external I/O. Watchpost does not impose an
+implicit execution deadline or terminate blocked Python threads. Async checks
+can use `asyncio.timeout()` to bound a whole operation; synchronous checks should
+use their client's connect/read timeouts. A stuck check occupies its own pending
+slot instead of accumulating a new job on every poll.
+
 ## Documentation
 
 See [`./docs`](docs/) for more information.
