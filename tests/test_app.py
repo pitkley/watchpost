@@ -22,7 +22,7 @@ import pytest
 
 from watchpost.app import Watchpost
 from watchpost.cache import CacheEntry, CacheKey, InMemoryStorage
-from watchpost.check import Check, check
+from watchpost.check import Check, CheckCache, check
 from watchpost.datasource import Datasource, DatasourceUnavailable
 from watchpost.environment import Environment
 from watchpost.executor import BlockingCheckExecutor
@@ -117,6 +117,7 @@ def test_run_checks_once():
     # Create a mock check that returns a known ExecutionResult
     mock_check = MagicMock(spec=Check)
     mock_check.name = "Test Check"
+    mock_check.identity = "Test Check"
     mock_check.service_name = "Test Check"
     mock_check.service_labels = {}
     mock_check.environments = [TEST_ENVIRONMENT]
@@ -168,6 +169,7 @@ def test_run_checks_once_with_multiple_checks():
     # Create two mock checks
     mock_check1 = MagicMock(spec=Check)
     mock_check1.name = "Test Check 1"
+    mock_check1.identity = "Test Check 1"
     mock_check1.service_name = "Test Check 1"
     mock_check1.service_labels = {}
     mock_check1.environments = [TEST_ENVIRONMENT]
@@ -185,6 +187,7 @@ def test_run_checks_once_with_multiple_checks():
 
     mock_check2 = MagicMock(spec=Check)
     mock_check2.name = "Test Check 2"
+    mock_check2.identity = "Test Check 2"
     mock_check2.service_name = "Test Check 2"
     mock_check2.service_labels = {}
     mock_check2.environments = [TEST_ENVIRONMENT]
@@ -616,7 +619,7 @@ def test_cache_is_used_only_if_no_fresh_results_available():
         return ok("Live result")
 
     # Pre-populate an expired cached result for this check/environment key
-    cache_key = f"{my_check.service_name}:{env.name}"
+    cache_key = CheckCache._generate_check_cache_key(my_check, env)
     cached_results = [
         ExecutionResult(
             piggyback_host="",

@@ -24,7 +24,7 @@ import pytest
 
 from watchpost.app import Watchpost
 from watchpost.cache import CacheEntry, CacheKey, InMemoryStorage
-from watchpost.check import CheckResult, check
+from watchpost.check import CheckCache, CheckResult, check
 from watchpost.environment import Environment
 from watchpost.executor import CheckExecutor
 from watchpost.result import CheckState, ExecutionResult, ok
@@ -130,7 +130,7 @@ def test_run_checks_returns_final_result_after_event_is_set():
 
         # Signal the check can complete and wait for the first submitted future to finish
         event.set()
-        key = (my_check.name, env.name)
+        key = (my_check.identity, env.name)
         key_state = executor._state.get(key)
         assert key_state, "future should be present for failing check"
         assert key_state.active_futures, "future should be present for failing check"
@@ -185,7 +185,7 @@ def test_executor_errored_integration_nonblocking():
         assert len(sr1) == 1 and sr1[0]["check_state"] == "UNKNOWN"
 
         # Let the check complete with an error and wait for its future
-        key = (failing_check.name, env.name)
+        key = (failing_check.identity, env.name)
         event.set()
         key_state = executor._state.get(key)
         assert key_state, "future should be present for failing check"
@@ -250,7 +250,7 @@ def test_async_uses_expired_cached_results_when_available_with_cache_for():
             return ok("Live result")
 
         # Pre-populate an expired cached result for this check/environment key
-        cache_key = f"{my_check.name}:{env.name}"
+        cache_key = CheckCache._generate_check_cache_key(my_check, env)
         cached_results = [
             ExecutionResult(
                 piggyback_host="",
@@ -308,7 +308,7 @@ def test_async_uses_expired_cached_results_when_available_with_cache_for_none():
             return ok("Live result")
 
         # Pre-populate an expired cached result for this check/environment key
-        cache_key = f"{my_check.name}:{env.name}"
+        cache_key = CheckCache._generate_check_cache_key(my_check, env)
         cached_results = [
             ExecutionResult(
                 piggyback_host="",
@@ -378,7 +378,7 @@ def test_raising_check_does_not_flap():
         assert len(sr1) == 1 and sr1[0]["check_state"] == "UNKNOWN"
 
         # 2. Set event and wait for execution to finish
-        key = (failing_check.name, env.name)
+        key = (failing_check.identity, env.name)
         event.set()
         key_state = executor._state.get(key)
         assert key_state, "future should be present for failing check"
@@ -438,7 +438,7 @@ def test_uncached_polls_share_one_execution_until_pickup(asynchronous):
             results = list(app.run_check(definition))
             assert results[0].check_state == CheckState.UNKNOWN
             assert executor.statistics().total == 1
-        key = (definition.name, env.name)
+        key = (definition.identity, env.name)
         pending = executor._state[key].active_futures[0]
         release.set()
         pending.result(5)

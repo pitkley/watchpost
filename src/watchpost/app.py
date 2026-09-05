@@ -786,11 +786,21 @@ class Watchpost:
             return
 
         exceptions = []
+        identities: set[tuple[str, str]] = set()
         with self.app_context():
             for check in self.checks:
                 try:
                     datasources = self._resolve_datasources(check)
                     for target_environment in check.environments:
+                        identity = (check.identity, target_environment.name)
+                        if identity in identities:
+                            exceptions.append(
+                                InvalidCheckConfiguration(
+                                    check,
+                                    "Duplicate check identity for target environment; assign distinct @check(id=...) values",
+                                )
+                            )
+                        identities.add(identity)
                         available_kwarg_keys = {
                             "environment",
                             *datasources.keys(),
@@ -956,7 +966,7 @@ class Watchpost:
             case _:
                 assert_never(scheduling_decision)  # type: ignore[type-assertion-failure]
 
-        executor_key = (check.name, environment.name)
+        executor_key = (check.identity, environment.name)
         should_update_cache = (
             check.cache_for is None
             or check_results_cache_entry is None

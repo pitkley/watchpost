@@ -41,6 +41,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import io
+import json
 import typing
 from collections.abc import Awaitable, Callable, Generator
 from dataclasses import dataclass
@@ -313,6 +314,21 @@ class Check:
     function raises an exception.
     """
 
+    id: str | None = None
+    """Optional stable identity for generated checks with otherwise identical names."""
+
+    @property
+    def identity(self) -> str:
+        """Stable execution/cache identity, independent of object memory addresses.
+
+        By default combines the qualified function name and service name. Supply
+        ``id`` when generated definitions share both. Changing an ID invalidates
+        that check's persistent result cache.
+        """
+        if self.id is not None:
+            return "explicit:" + self.id
+        return "auto:" + json.dumps([self.name, self.service_name])
+
     def __hash__(self) -> int:
         """
         Return a stable hash for the check based on its defining properties.
@@ -332,8 +348,8 @@ class Check:
         """
         Returns the fully qualified name of the check function.
 
-        This is used as a stable identifier in places like caching keys and
-        diagnostics.
+        This is the diagnostic and CLI filtering name; execution and cache
+        keys use ``identity``.
         """
 
         return f"{self.check_function.__module__}.{self.check_function.__qualname__}"
@@ -385,6 +401,8 @@ class Check:
         Caches the function signature to avoid repeated `inspect.signature`
         calls.
         """
+        if self.id is not None and not self.id.strip():
+            raise ValueError("Check id must not be empty")
         object.__setattr__(
             self,
             "_check_function_signature",
@@ -620,6 +638,7 @@ def check(
     hostname: HostnameInput | None = None,
     scheduling_strategies: list[SchedulingStrategy] | None = None,
     error_handlers: list[ErrorHandler] | None = None,
+    id: str | None = None,
 ) -> Callable[[CheckFunction], Check]:
     """
     Decorator to define a Watchpost check function.
@@ -652,6 +671,9 @@ def check(
         error_handlers:
             Optional list of error handlers that are called to adapt the results
             when the check function raises an exception.
+        id:
+            Stable identity override for generated checks sharing both qualified
+            function and service names. Must be unique per target environment.
 
     Returns:
         A `Check` instance wrapping the decorated function and provided
@@ -675,6 +697,7 @@ def check(
             scheduling_strategies=scheduling_strategies,
             hostname_strategy=to_strategy(hostname),
             error_handlers=error_handlers,
+            id=id,
         )
 
     return decorator
@@ -719,9 +742,10 @@ class CheckCache:
         Generate a stable cache key for a check/environment pair.
 
         Returns:
-            A string in the form "{check.name}:{environment.name}".
+            A versioned key containing the check identity and environment.
+            Legacy name-only entries are intentionally not reused.
         """
-        return f"{check.name}:{environment.name}"
+        return "v2:" + json.dumps([check.identity, environment.name])
 
     def get_check_results_cache_entry(
         self,
