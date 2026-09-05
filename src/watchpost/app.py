@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import threading
 import traceback
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
@@ -312,6 +313,8 @@ class Watchpost:
                 during hostname resolution. If `False`, a non-compliant hostname
                 will result in an error.
         """
+        self._poll_lock = threading.RLock()
+        self._poll_locks: dict[tuple[str, str], threading.RLock] = {}
         self.checks: list[Check] = []
         for check_or_module in checks:
             if isinstance(check_or_module, ModuleType):
@@ -1092,19 +1095,23 @@ class Watchpost:
             `ExecutionResult` objects produced by the check for each environment.
         """
         with self.app_context():
-            instantiable_datasources = self._resolve_datasources(check)
             for environment in check.environments:
-                execution_results = self._run_check(
-                    check=check,
-                    environment=environment,
-                    instantiable_datasources=instantiable_datasources,
-                    custom_executor=custom_executor,
-                    use_cache=use_cache,
-                )
-
-                if not execution_results:
-                    continue
-                yield from execution_results
+                key = (check.identity, environment.name)
+                with self._poll_lock:
+                    lock = self._poll_locks.setdefault(key, threading.RLock())
+                # Submit, pickup and cache publication form one poll transaction.
+                # Different keys can still execute and be polled concurrently.
+                with lock:
+                    instantiable_datasources = self._resolve_datasources(check)
+                    execution_results = self._run_check(
+                        check=check,
+                        environment=environment,
+                        instantiable_datasources=instantiable_datasources,
+                        custom_executor=custom_executor,
+                        use_cache=use_cache,
+                    )
+                if execution_results:
+                    yield from execution_results
 
     def run_checks(self, act_as_agent: bool = True) -> Generator[bytes]:
         """
