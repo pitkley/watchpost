@@ -38,7 +38,6 @@ Notes:
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import inspect
 import io
@@ -48,6 +47,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
 
+from ._capture import capture_output
 from .cache import Cache, CacheEntry, Storage
 from .datasource import Datasource
 from .environment import Environment
@@ -530,25 +530,18 @@ class Check:
             environment=environment,
             datasources=datasources,
         )
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with (
-            contextlib.redirect_stdout(stdout),
-            contextlib.redirect_stderr(stderr),
-        ):
-            with watchpost.app_context():
-                initial_result = cast(
-                    CheckFunctionResult,
-                    self.check_function(**kwargs),  # type: ignore[call-arg]
-                )
-
-        return self._normalize_and_materialize_results(
-            watchpost=watchpost,
-            environment=environment,
-            initial_result=initial_result,
-            stdout=stdout,
-            stderr=stderr,
-        )
+        with capture_output() as (stdout, stderr), watchpost.app_context():
+            initial_result = cast(
+                CheckFunctionResult,
+                self.check_function(**kwargs),  # type: ignore[call-arg]
+            )
+            return self._normalize_and_materialize_results(
+                watchpost=watchpost,
+                environment=environment,
+                initial_result=initial_result,
+                stdout=stdout,
+                stderr=stderr,
+            )
 
     async def run_async(
         self,
@@ -588,25 +581,18 @@ class Check:
             environment=environment,
             datasources=datasources,
         )
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with (
-            contextlib.redirect_stdout(stdout),
-            contextlib.redirect_stderr(stderr),
-        ):
-            with watchpost.app_context():
-                initial_result = await cast(
-                    Awaitable[CheckFunctionResult],
-                    self.check_function(**kwargs),  # type: ignore[call-arg]
-                )
-
-        return self._normalize_and_materialize_results(
-            watchpost=watchpost,
-            environment=environment,
-            initial_result=initial_result,
-            stdout=stdout,
-            stderr=stderr,
-        )
+        with capture_output() as (stdout, stderr), watchpost.app_context():
+            initial_result = await cast(
+                Awaitable[CheckFunctionResult],
+                self.check_function(**kwargs),  # type: ignore[call-arg]
+            )
+            return self._normalize_and_materialize_results(
+                watchpost=watchpost,
+                environment=environment,
+                initial_result=initial_result,
+                stdout=stdout,
+                stderr=stderr,
+            )
 
     def apply_error_handlers(
         self,
