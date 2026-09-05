@@ -129,10 +129,12 @@ def test_watchpost_mixed_checks_and_module_discovery_and_run_once(temp_pkg):
         synthetic = next(
             r for r in results if r["service_name"] == "Watchpost: executed checks"
         )
-        assert synthetic["summary"] == f"Ran {len(app.checks)} checks"
-        # Details should list all discovered checks; accept either service_name or function path
+        assert (
+            synthetic["summary"]
+            == f"{len(app.checks)} check/environment pairs eligible to run"
+        )
+        # Each discovered check targets E and is eligible to run there.
         details = synthetic["details"] or ""
-        assert "Check functions:\n- " in details
+        assert "Eligible check/environment pairs:\n- " in details
         for chk in app.checks:
-            # Either the human-facing service name or the fully-qualified function name
-            assert f"- {chk.name}" in details
+            assert f"- {chk.name} [E]" in details

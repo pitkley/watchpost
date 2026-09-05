@@ -143,6 +143,11 @@ check functions: `DatasourceUnavailable` produces UNKNOWN (or an available prior
 cached result with failure details), while other exceptions produce CRIT. Error
 handlers still expand those results, and unrelated checks continue running.
 
+The synthetic `Watchpost: executed checks` service reports the number of
+check/environment pairs eligible to run in the current poll (`SCHEDULE`). This
+includes cached results and checks already running; it excludes `SKIP` and
+`DONT_SCHEDULE`. It counts pairs, not emitted services or completed invocations.
+
 ## Documentation
 
 See [`./docs`](docs/) for more information.

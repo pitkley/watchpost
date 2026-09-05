@@ -23,7 +23,13 @@ from watchpost.app import Watchpost
 from watchpost.check import check
 from watchpost.environment import Environment
 from watchpost.executor import BlockingCheckExecutor, CheckExecutor
-from watchpost.http import routes
+from watchpost.http import (
+    executor_errored,
+    executor_statistics,
+    healthcheck,
+    root,
+    routes,
+)
 from watchpost.result import ok
 
 from .utils import decode_checkmk_output
@@ -170,9 +176,9 @@ def test_root_with_real_check():
                 "service_labels": {},
                 "environment": "test-env",
                 "check_state": "OK",
-                "summary": "Ran 1 checks",
+                "summary": "1 check/environment pairs eligible to run",
                 "metrics": [],
-                "details": "Check functions:\n- tests.test_http.test_root_with_real_check.<locals>.simple_check",
+                "details": "Eligible check/environment pairs:\n- tests.test_http.test_root_with_real_check.<locals>.simple_check [test-env]",
             },
         ],
         key=lambda result: result["service_name"],
@@ -232,9 +238,9 @@ def test_root_with_real_check_and_datasource():
                 "service_labels": {},
                 "environment": "test-env",
                 "check_state": "OK",
-                "summary": "Ran 1 checks",
+                "summary": "1 check/environment pairs eligible to run",
                 "metrics": [],
-                "details": "Check functions:\n- tests.test_http.test_root_with_real_check_and_datasource.<locals>.simple_check",
+                "details": "Eligible check/environment pairs:\n- tests.test_http.test_root_with_real_check_and_datasource.<locals>.simple_check [test-env]",
             },
         ],
         key=lambda result: result["service_name"],
@@ -251,11 +257,11 @@ def test_routes_configuration():
     assert "/" in route_paths
 
     # Verify that the routes have the expected endpoints
-    route_endpoints = {route.path: route.endpoint.__name__ for route in routes}
-    assert route_endpoints["/healthcheck"] == "healthcheck"
-    assert route_endpoints["/executor/statistics"] == "executor_statistics"
-    assert route_endpoints["/executor/errored"] == "executor_errored"
-    assert route_endpoints["/"] == "root"
+    route_endpoints = {route.path: route.endpoint for route in routes}
+    assert route_endpoints["/healthcheck"] is healthcheck
+    assert route_endpoints["/executor/statistics"] is executor_statistics
+    assert route_endpoints["/executor/errored"] is executor_errored
+    assert route_endpoints["/"] is root
 
 
 def test_lifespan_closes_owned_executor():

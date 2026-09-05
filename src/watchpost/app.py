@@ -36,7 +36,7 @@ import threading
 import traceback
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from types import EllipsisType, ModuleType
 from typing import (
@@ -79,6 +79,12 @@ logger = logging.getLogger(f"{__package__}.{__name__}")
 
 _D = TypeVar("_D", bound=Datasource)
 _DF = TypeVar("_DF", bound=DatasourceFactory)
+
+
+@dataclass(frozen=True)
+class _PollOutcome:
+    decision: SchedulingDecision
+    results: list[ExecutionResult] | None
 
 
 class _InstantiableDatasource[D: Datasource, DF: DatasourceFactory]:
@@ -482,44 +488,28 @@ class Watchpost:
         yield b"\n"
         yield b"AgentOS: watchpost\n"
 
-    def _generate_synthetic_result_outputs(self) -> Generator[bytes]:
-        """
-        Generate synthetic results that complement real check outputs.
-
-        Returns:
-            A byte stream representing additional sections, such as a summary of
-            all discovered check functions.
-        """
-
-        def run_checks() -> ExecutionResult:
-            applicable_checks = [
-                check
-                for check in self.checks
-                if self._resolve_check_scheduling_decision(
-                    check, self.execution_environment
-                )
-                == SchedulingDecision.SCHEDULE
-            ]
-
-            details = "Check functions:\n- "
-            details += "\n- ".join(check.name for check in applicable_checks)
-
-            return ExecutionResult(
-                piggyback_host="",
-                service_name="Watchpost: executed checks",
-                service_labels={},
-                environment_name=self.execution_environment.name,
-                check_state=CheckState.OK,
-                summary=f"Ran {len(applicable_checks)} checks",
-                details=details,
+    def _generate_synthetic_result_outputs(
+        self,
+        eligible_pairs: list[tuple[Check, Environment]],
+    ) -> Generator[bytes]:
+        """Describe actual SCHEDULE decisions from this poll, including cache hits."""
+        details = "Eligible check/environment pairs:"
+        if eligible_pairs:
+            details += "\n- " + "\n- ".join(
+                f"{check.name} [{environment.name}]"
+                for check, environment in eligible_pairs
             )
-
-        execution_results = [
-            run_checks(),
-        ]
-
-        for execution_result in execution_results:
-            yield from execution_result.generate_checkmk_output()
+        result = ExecutionResult(
+            piggyback_host="",
+            # Preserve this service identity for existing Checkmk installations.
+            service_name="Watchpost: executed checks",
+            service_labels={},
+            environment_name=self.execution_environment.name,
+            check_state=CheckState.OK,
+            summary=f"{len(eligible_pairs)} check/environment pairs eligible to run",
+            details=details,
+        )
+        yield from result.generate_checkmk_output()
 
     def _resolve_instantiable_datasource(
         self,
@@ -887,6 +877,7 @@ class Watchpost:
         *,
         custom_executor: CheckExecutor[list[ExecutionResult]] | None = None,
         use_cache: bool = True,
+        scheduling_decision: SchedulingDecision | None = None,
     ) -> list[ExecutionResult] | None:
         """
         Execute a single check for one environment and return its results.
@@ -922,10 +913,10 @@ class Watchpost:
             coerce_into_valid_hostname=self.hostname_coerce_into_valid_hostname,
         )
 
-        scheduling_decision = self._resolve_check_scheduling_decision(
-            check,
-            environment,
-        )
+        if scheduling_decision is None:
+            scheduling_decision = self._resolve_check_scheduling_decision(
+                check, environment
+            )
 
         if use_cache:
             check_results_cache_entry = self._check_cache.get_check_results_cache_entry(
@@ -1063,6 +1054,32 @@ class Watchpost:
 
         return maybe_execution_results
 
+    def _poll_check(
+        self,
+        check: Check,
+        environment: Environment,
+        *,
+        custom_executor: CheckExecutor[list[ExecutionResult]] | None = None,
+        use_cache: bool = True,
+    ) -> _PollOutcome:
+        """Evaluate one pair, completing the transaction before returning or yielding."""
+        with self.app_context():
+            key = (check.identity, environment.name)
+            with self._poll_lock:
+                lock = self._poll_locks.setdefault(key, threading.RLock())
+            with lock:
+                datasources = self._resolve_datasources(check)
+                decision = self._resolve_check_scheduling_decision(check, environment)
+                results = self._run_check(
+                    check=check,
+                    environment=environment,
+                    instantiable_datasources=datasources,
+                    custom_executor=custom_executor,
+                    use_cache=use_cache,
+                    scheduling_decision=decision,
+                )
+        return _PollOutcome(decision, results)
+
     def run_check(
         self,
         check: Check,
@@ -1085,23 +1102,14 @@ class Watchpost:
             `ExecutionResult` objects produced by the check for each environment.
         """
         for environment in check.environments:
-            with self.app_context():
-                key = (check.identity, environment.name)
-                with self._poll_lock:
-                    lock = self._poll_locks.setdefault(key, threading.RLock())
-                # Submit, pickup and cache publication form one poll transaction.
-                # Different keys can still execute and be polled concurrently.
-                with lock:
-                    instantiable_datasources = self._resolve_datasources(check)
-                    execution_results = self._run_check(
-                        check=check,
-                        environment=environment,
-                        instantiable_datasources=instantiable_datasources,
-                        custom_executor=custom_executor,
-                        use_cache=use_cache,
-                    )
-            if execution_results:
-                yield from execution_results
+            outcome = self._poll_check(
+                check,
+                environment,
+                custom_executor=custom_executor,
+                use_cache=use_cache,
+            )
+            if outcome.results:
+                yield from outcome.results
 
     def run_checks(self, act_as_agent: bool = True) -> Generator[bytes]:
         """
@@ -1125,13 +1133,16 @@ class Watchpost:
         if act_as_agent:
             yield from self._generate_checkmk_agent_output()
 
+        eligible_pairs = []
         for check in self.checks:
-            for execution_result in self.run_check(check):
-                yield from execution_result.generate_checkmk_output()
+            for environment in check.environments:
+                outcome = self._poll_check(check, environment)
+                if outcome.decision == SchedulingDecision.SCHEDULE:
+                    eligible_pairs.append((check, environment))
+                for result in outcome.results or []:
+                    yield from result.generate_checkmk_output()
 
-        with self.app_context():
-            synthetic_output = list(self._generate_synthetic_result_outputs())
-        yield from synthetic_output
+        yield from self._generate_synthetic_result_outputs(eligible_pairs)
 
     def run_checks_once(self, act_as_agent: bool = True) -> None:
         """

@@ -151,9 +151,9 @@ def test_uninstantiable_datasource_does_not_affect_other_checks():
                 "service_labels": {},
                 "environment": "env1",
                 "check_state": "OK",
-                "summary": "Ran 2 checks",
+                "summary": "1 check/environment pairs eligible to run",
                 "metrics": [],
-                "details": "Check functions:\n- tests.test_datasource_instantiation.test_uninstantiable_datasource_does_not_affect_other_checks.<locals>.uninvokable\n- tests.test_datasource_instantiation.test_uninstantiable_datasource_does_not_affect_other_checks.<locals>.env1",
+                "details": "Eligible check/environment pairs:\n- tests.test_datasource_instantiation.test_uninstantiable_datasource_does_not_affect_other_checks.<locals>.env1 [env1]",
             },
             {
                 "service_name": "env1",
