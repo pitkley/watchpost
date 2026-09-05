@@ -1,4 +1,5 @@
 # Copyright 2025 TAKKT Industrial & Packaging GmbH
+# Copyright 2026 Pit Kleyersburg <pitkley@googlemail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,10 +17,7 @@
 
 from __future__ import annotations
 
-import re
 from typing import Annotated
-
-import pytest
 
 from watchpost.app import Watchpost
 from watchpost.check import check
@@ -95,13 +93,12 @@ def test_datasources_are_not_eagerly_instantiated():
     # datasources are not being instantiated.
     app.verify_check_scheduling()
 
-    # Executing the checks should fail because the requested datasource cannot be
-    # instantiated.
-    with pytest.raises(
-        RuntimeError,
-        match=re.escape("Cannot instantiate this class."),
-    ):
-        _ = b"".join(app.run_checks())
+    # Construction failures become per-check results, including factory failures.
+    results = decode_checkmk_output(b"".join(app.run_checks()))
+    failures = [r for r in results if r["service_name"].startswith("uninvokable")]
+    assert failures
+    assert all(r["check_state"] == "CRIT" for r in failures)
+    assert all(r["summary"] == "Cannot instantiate this class." for r in failures)
 
 
 def test_uninstantiable_datasource_does_not_affect_other_checks():
@@ -172,10 +169,10 @@ def test_uninstantiable_datasource_does_not_affect_other_checks():
         key=lambda result: result["service_name"],
     )
 
-    # Executing the checks against env2 should fail, though:
+    # In env2 the failing check emits CRIT without aborting the stream:
     app.execution_environment = ENVIRONMENT2
-    with pytest.raises(
-        RuntimeError,
-        match=re.escape("Cannot instantiate this class."),
-    ):
-        _ = b"".join(app.run_checks())
+    results = decode_checkmk_output(b"".join(app.run_checks()))
+    failures = [r for r in results if r["service_name"].startswith("uninvokable")]
+    assert failures
+    assert all(r["check_state"] == "CRIT" for r in failures)
+    assert all(r["summary"] == "Cannot instantiate this class." for r in failures)
