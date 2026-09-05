@@ -55,7 +55,8 @@ def _get_check_hostnames(
                     fallback_to_default_hostname_generation=app.hostname_fallback_to_default_hostname_generation,
                     coerce_into_valid_hostname=app.hostname_coerce_into_valid_hostname,
                 )
-                hostnames.add(hostname)
+                if hostname:
+                    hostnames.add(hostname)
             except Exception as e:
                 if collect_errors:
                     errors.append(
