@@ -133,6 +133,11 @@ identities fail configuration validation. Identity changes invalidate cached
 results. The versioned identity keys intentionally ignore older name-only cache
 entries, causing a fresh execution after upgrading.
 
+Each resolved `(hostname, service_name)` must be unique across all collected
+Watchpost results. The Checkmk plugin discovers one service for a duplicate
+identity and reports UNKNOWN with the conflicting results, instead of selecting
+one result and hiding the others. Use distinct names, result suffixes, or hosts.
+
 ## Documentation
 
 See [`./docs`](docs/) for more information.

@@ -18,6 +18,7 @@ import base64
 import json
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, TypedDict
 
 from cmk.agent_based.v2 import (
@@ -57,6 +58,13 @@ class Check(TypedDict):
 @dataclass
 class Section:
     checks: list[Check]
+
+    @cached_property
+    def by_service(self) -> dict[str, list[Check]]:
+        services: dict[str, list[Check]] = {}
+        for check in self.checks:
+            services.setdefault(check["service_name"], []).append(check)
+        return services
 
 
 def parse_metrics(metrics: list[dict] | None) -> list[Metric]:
@@ -102,27 +110,37 @@ def parse_function(string_table: StringTable) -> Section | None:
 
 
 def discovery_function(section: Section) -> Iterator[Service]:
-    for check in section.checks:
+    for name, checks in section.by_service.items():
+        # Conflicting definitions must not silently inherit arbitrary labels.
+        labels = checks[0]["service_labels"] if len(checks) == 1 else {}
         yield Service(
-            item=check["service_name"],
-            labels=[
-                ServiceLabel(key, value)
-                for key, value in check["service_labels"].items()
-            ],
+            item=name,
+            labels=[ServiceLabel(key, value) for key, value in labels.items()],
         )
 
 
 def check_function(item: str, section: Section) -> CheckResult:
-    check: Check | None = next(
-        (check for check in section.checks if check["service_name"] == item),
-        None,
-    )
-    if check is None:
+    checks = section.by_service.get(item, [])
+    if not checks:
         raise IgnoreResultsError("section for check not found")
+    if len(checks) > 1:
+        yield Result(
+            state=State.UNKNOWN,
+            summary=f"Duplicate Watchpost service: {item}",
+            details=(
+                f"Received {len(checks)} results for this host/service identity. "
+                "Assign distinct service names, result suffixes, or hostnames. "
+                "Conflicting results:\n"
+                + "\n".join(
+                    f"{check['check_state'].name}: {sanitize_summary(check['summary'])}"
+                    for check in checks
+                )
+            ),
+        )
+        return
 
-    if check["metrics"]:
-        yield from check["metrics"]
-
+    check = checks[0]
+    yield from check["metrics"]
     yield Result(
         state=check["check_state"],
         summary=sanitize_summary(check["summary"]),
