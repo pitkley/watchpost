@@ -1,4 +1,5 @@
 # Copyright 2025 TAKKT Industrial & Packaging GmbH
+# Copyright 2026 Pit Kleyersburg <pitkley@googlemail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -222,7 +223,12 @@ def run_checks(
                 use_cache=cache,
             )
 
-    display_results_table(_run())
+    try:
+        display_results_table(_run())
+    finally:
+        if custom_executor is not None:
+            custom_executor.shutdown(wait=True, cancel_futures=True)
+        app.shutdown()
 
 
 @cli.command()  # type: ignore[misc]
