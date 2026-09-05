@@ -126,6 +126,13 @@ caller-owned and must be closed by the caller. For standalone use, call
 `app.shutdown()` after finishing. Direct executor users can drain work with
 `shutdown(wait=True)` or request cancellation with `cancel_futures=True`.
 
+Generated checks use their qualified function name and service name as the
+stable execution/cache identity. If a factory generates checks sharing both,
+assign distinct `@check(id="...")` values per target environment. Duplicate
+identities fail configuration validation. Identity changes invalidate cached
+results. The versioned identity keys intentionally ignore older name-only cache
+entries, causing a fresh execution after upgrading.
+
 ## Documentation
 
 See [`./docs`](docs/) for more information.
