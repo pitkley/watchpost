@@ -284,8 +284,9 @@ class Check:
     cache_for: timedelta | None
     """
     Optional time-to-live for caching check results. If set, results are cached
-    for this duration, otherwise they are always re-executed after Checkmk picks
-    up results.
+    for this duration. Without caching, the next poll after result pickup starts
+    another execution. Polls share outstanding work; a check/environment pair
+    never overlaps executions through the application.
     """
 
     invocation_information: InvocationInformation | None = None

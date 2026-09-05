@@ -960,7 +960,7 @@ class Watchpost:
             executor.submit(
                 key=executor_key,
                 func=check.run_async if check.is_async else check.run_sync,
-                resubmit=check.cache_for is None,
+                resubmit=False,
                 watchpost=self,
                 environment=environment,
                 datasources=datasources,

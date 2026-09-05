@@ -16,8 +16,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from concurrent.futures import wait
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from watchpost.app import Watchpost
 from watchpost.cache import CacheEntry, CacheKey, InMemoryStorage
@@ -46,7 +49,7 @@ def test_run_checks_returns_placeholder_until_result_is_ready():
             name="nonblocking-service",
             service_labels={"test": "true"},
             environments=[env],
-            cache_for=None,  # ensure resubmit behavior each run
+            cache_for=None,  # rerun only after the previous result is picked up
         )
         def my_check() -> object:
             event.wait()
@@ -103,7 +106,7 @@ def test_run_checks_returns_final_result_after_event_is_set():
             name="nonblocking-service",
             service_labels={"test": "true"},
             environments=[env],
-            cache_for=None,  # ensure resubmit behavior each run
+            cache_for=None,  # rerun only after the previous result is picked up
         )
         def my_check() -> object:
             event.wait()
@@ -298,7 +301,7 @@ def test_async_uses_expired_cached_results_when_available_with_cache_for_none():
             name="nonblocking-service",
             service_labels={"test": "true"},
             environments=[env],
-            cache_for=None,  # always resubmit, but should still honor persistent cached results
+            cache_for=None,  # honor persistent fallback while sharing pending work
         )
         def my_check() -> object:
             event.wait()
@@ -407,3 +410,47 @@ def test_raising_check_does_not_flap():
         sr4 = [r for r in results4 if r["service_name"] == "failing-service"]
         assert len(sr4) == 1 and sr4[0]["check_state"] == "UNKNOWN"
         assert executor._state.get(key) is not None
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_uncached_polls_share_one_execution_until_pickup(asynchronous):
+    env = Environment("bounded")
+    calls = []
+    with CheckExecutor(max_workers=1) as executor, with_event() as release:
+
+        def sync_check():
+            calls.append(1)
+            release.wait(5)
+            return ok("done")
+
+        async def async_check():
+            calls.append(1)
+            await asyncio.to_thread(release.wait, 5)
+            return ok("done")
+
+        definition = check(
+            name="bounded", service_labels={}, environments=[env], cache_for=None
+        )(async_check if asynchronous else sync_check)
+        app = Watchpost(
+            checks=[definition], execution_environment=env, executor=executor
+        )
+        for _ in range(30):
+            results = list(app.run_check(definition))
+            assert results[0].check_state == CheckState.UNKNOWN
+            assert executor.statistics().total == 1
+        key = (definition.name, env.name)
+        pending = executor._state[key].active_futures[0]
+        release.set()
+        pending.result(5)
+        picked_up = list(app.run_check(definition))
+        assert picked_up[0].summary == "done"
+        assert executor.statistics().total == 0
+        assert len(calls) == 1
+        # The next poll may complete immediately, but must start one fresh job.
+        list(app.run_check(definition))
+        executor.executor.shutdown(wait=True)
+        if asynchronous:
+            state = executor._state.get(key)
+            if state:
+                state.active_futures[0].result(5)
+        assert len(calls) == 2
