@@ -24,7 +24,7 @@ import base64
 import io
 import json
 import traceback
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from types import GeneratorType
@@ -731,7 +731,7 @@ def normalize_check_function_result(
     stdout: io.StringIO,
     stderr: io.StringIO,
 ) -> list[CheckResult]:
-    maybe_ongoing_check_results: list[CheckResult | OngoingCheckResult]
+    maybe_ongoing_check_results: Sequence[CheckResult | OngoingCheckResult]
     if isinstance(check_function_result, GeneratorType):
         maybe_ongoing_check_results = list(check_function_result)
     elif isinstance(check_function_result, list):
