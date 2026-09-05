@@ -150,7 +150,10 @@ includes cached results and checks already running; it excludes `SKIP` and
 
 ## Documentation
 
-See [`./docs`](docs/) for more information.
+Start with the [quickstart](docs/home/quickstart.md), follow the
+[Checkmk integration guide](docs/home/checkmk.md), and read the
+[deployment and runtime guide](docs/home/deployment.md) for polling, caching,
+worker behavior, timeouts, and shutdown.
 
 ## License
 

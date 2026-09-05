@@ -20,26 +20,9 @@ If you need to install uv, see the [uv installation guide](https://docs.astral.s
 
 2. Add Watchpost to your project:
 
-    ```console
-    $ cd my-watchpost
-    $ uv add 'watchpost[cli]'
-    Using CPython 3.13.5
-    Creating virtual environment at: .venv
-    Resolved 12 packages in 266ms
-          Built my-watchpost @ file:///tmp/my-watchpost
-    Prepared 6 packages in 166ms
-    Installed 11 packages in 25ms
-     + anyio==4.12.1
-     + click==8.3.1
-     + idna==3.11
-     + markdown-it-py==4.0.0
-     + mdurl==0.1.2
-     + my-watchpost==0.1.0 (from file:///Users/pit/tmp/mycontent/my-watchpost)
-     + pygments==2.19.2
-     + rich==14.2.0
-     + starlette==0.47.3
-     + timelength==3.0.2
-     + watchpost==0.1.0
+    ```sh
+    cd my-watchpost
+    uv add 'watchpost[cli]'
     ```
 
     We recommend installing Watchpost with the `cli` extra.
@@ -79,18 +62,8 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
 
     We use httpx and its `AsyncClient` to demonstrate async checks, but you can use any HTTP client (async or sync) for your own checks.
 
-    ```console
-    $ uv add httpx
-    Resolved 17 packages in 658ms
-          Built my-watchpost @ file:///tmp/my-watchpost
-    Prepared 1 package in 11ms
-    Uninstalled 1 package in 8ms
-    Installed 5 packages in 28ms
-     + certifi==2025.8.3
-     + h11==0.16.0
-     + httpcore==1.0.9
-     + httpx==0.28.1
-     ~ my-watchpost==0.1.0 (from file:///tmp/my-watchpost)
+    ```sh
+    uv add httpx
     ```
 
 2. Edit `my-watchpost/src/my_watchpost/__init__.py` to:
@@ -116,7 +89,7 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
 
         @asynccontextmanager
         async def client(self):
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 yield client
 
 
@@ -184,12 +157,18 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
     └───────┴─────────────┴─────────────────────────┴───────────────────┘
     ```
 
-You have now built your first Watchpost application and check. 🎉
-
 ## Checkmk integration
 
-_TODO_
+Continue with the [Checkmk integration guide](checkmk.md) to install the plugin,
+configure HTTP collection, create piggyback target hosts, and discover services.
+Use `my_watchpost:app` wherever that guide uses `integration_example:app`.
+This application's default target host is `example.com-http-status-production`;
+verify it with:
 
-## Summary
+```sh
+uv run watchpost --app my_watchpost:app get-check-hostnames
+```
 
-This example shows how you can codify checks with Watchpost in a clean, testable way. If you can code it, you can check it.
+Before running the application continuously, review the
+[deployment guide](deployment.md) for polling, caching, worker limits, HTTP
+access, and resource shutdown.
