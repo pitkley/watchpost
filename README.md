@@ -17,7 +17,7 @@ You can now write a basic Watchpost application like this:
 import urllib.error
 import urllib.request
 
-from watchpost import EnvironmentRegistry, Watchpost, check, crit, ok
+from watchpost import CheckResult, EnvironmentRegistry, Watchpost, check, crit, ok
 
 ENVIRONMENTS = EnvironmentRegistry()
 PRODUCTION = ENVIRONMENTS.new("production")
@@ -29,9 +29,9 @@ PRODUCTION = ENVIRONMENTS.new("production")
     environments=[PRODUCTION],
     cache_for="5m",
 )
-async def example_com_http_status():
+def example_com_http_status() -> CheckResult:
     try:
-        with urllib.request.urlopen("https://www.example.com") as response:
+        with urllib.request.urlopen("https://www.example.com", timeout=10) as response:
             status_code = response.status
     except urllib.error.HTTPError as e:
         status_code = e.code
