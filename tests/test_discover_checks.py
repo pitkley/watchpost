@@ -15,11 +15,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import importlib
+import re
+import sys
 import uuid
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
+from watchpost.check import Check
 from watchpost.discover_checks import DiscoveryError, discover_checks
 
 
@@ -104,12 +108,12 @@ def test_recursive_discovery_across_subpackages_and_dedup(temp_pkg):
     assert names == ["svc_a_sub", "svc_b_mod"]
 
 
-def test_include_module_predicate_limits_traversal(temp_pkg):
-    # Only include modules whose dotted name contains '.b.' (root excluded to avoid re-export)
+def test_include_module_predicate_preserves_descendant_traversal(temp_pkg):
+    # Both the root and intermediate package are omitted from scanning.
     checks = discover_checks(
         temp_pkg,
         recursive=True,
-        include_module=lambda m: ".b." in m.__name__,
+        include_module=lambda m: m.__name__ == f"{temp_pkg.__name__}.b.mod",
     )
     names = sorted(c.service_name for c in checks)
     assert names == ["svc_b_mod"]
@@ -117,13 +121,34 @@ def test_include_module_predicate_limits_traversal(temp_pkg):
 
 def test_exclude_module_predicate_skips_modules(temp_pkg):
     # Exclude modules under the 'a' package; note the root module still re-exports a_sub
+    excluded_package = f"{temp_pkg.__name__}.a"
+    scanned_modules: list[str] = []
+
+    def record_check(_check: Check, module: ModuleType, _name: str) -> bool:
+        scanned_modules.append(module.__name__)
+        return True
+
     checks = discover_checks(
         temp_pkg,
         recursive=True,
-        exclude_module=lambda m: m.__name__.startswith("temp_pkg.a"),
+        exclude_module=lambda m: (
+            m.__name__ == excluded_package
+            or m.__name__.startswith(f"{excluded_package}.")
+        ),
+        check_filter=record_check,
     )
     names = sorted(c.service_name for c in checks)
     assert names == ["svc_a_sub", "svc_b_mod"]
+    assert scanned_modules == [temp_pkg.__name__, f"{temp_pkg.__name__}.b.mod"]
+
+
+def test_reexport_rejected_by_filter_does_not_hide_original_check(temp_pkg):
+    checks = discover_checks(
+        temp_pkg,
+        check_filter=lambda _check, module, _name: module is not temp_pkg,
+    )
+    assert sorted(c.service_name for c in checks) == ["svc_a_sub", "svc_b_mod"]
+    assert sum(check is temp_pkg.reexported_check for check in checks) == 1
 
 
 def test_check_filter_can_filter_specific_checks(temp_pkg):
@@ -156,3 +181,161 @@ def test_accepts_module_as_string_and_object(temp_pkg):
     # As module object
     checks_mod = discover_checks(temp_pkg, recursive=False)
     assert {c.service_name for c in checks_str} == {c.service_name for c in checks_mod}
+
+
+@pytest.fixture()
+def traversal_pkg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """A package whose import side effects expose traversal and retry behavior."""
+    package = tmp_path / f"traversal_pkg_{uuid.uuid4().hex}"
+    (package / "skipped").mkdir(parents=True)
+    (package / "__init__.py").write_text("import_attempts = []\n")
+    (package / "skipped" / "__init__.py").write_text(
+        "from .. import import_attempts\nimport_attempts.append('skipped')\n"
+    )
+    (package / "skipped" / "child.py").write_text(
+        "from .. import import_attempts\n"
+        "import_attempts.append('skipped.child')\n"
+        "raise RuntimeError('excluded descendant was imported')\n"
+    )
+    # This sibling sorts after the failing package to verify traversal continues.
+    (package / "z_healthy.py").write_text(
+        "from . import import_attempts\n"
+        "from watchpost.check import check\n"
+        "from watchpost.environment import Environment\n"
+        "import_attempts.append('healthy')\n"
+        "@check(name='healthy', service_labels={}, environments=[Environment('e')], cache_for=None)\n"
+        "def healthy_check():\n"
+        "    return []\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    return importlib.import_module(package.name)
+
+
+@pytest.mark.parametrize("exception_type", [RuntimeError, ImportError])
+@pytest.mark.parametrize("strict", [False, True])
+def test_broken_package_initializer_obeys_import_error_policy(
+    traversal_pkg: ModuleType,
+    exception_type: type[Exception],
+    strict: bool,
+) -> None:
+    assert traversal_pkg.__file__ is not None
+    initializer = Path(traversal_pkg.__file__).parent / "skipped" / "__init__.py"
+    initializer.write_text(
+        "from .. import import_attempts\n"
+        "import_attempts.append('skipped')\n"
+        f"raise {exception_type.__name__}('initializer failed')\n"
+    )
+
+    if strict:
+        with pytest.raises(
+            DiscoveryError,
+            match=re.escape(f"Failed to import {traversal_pkg.__name__}.skipped"),
+        ) as exc:
+            discover_checks(traversal_pkg, raise_on_import_error=True)
+        assert isinstance(exc.value.__cause__, exception_type)
+        assert str(exc.value.__cause__) == "initializer failed"
+        assert getattr(traversal_pkg, "import_attempts") == ["skipped"]
+    else:
+        checks = discover_checks(traversal_pkg, raise_on_import_error=False)
+        assert [check.service_name for check in checks] == ["healthy"]
+        assert getattr(traversal_pkg, "import_attempts") == ["skipped", "healthy"]
+
+    assert f"{traversal_pkg.__name__}.skipped.child" not in sys.modules
+
+
+def test_exclude_module_prunes_package_descendants(traversal_pkg: ModuleType) -> None:
+    checks = discover_checks(
+        traversal_pkg,
+        exclude_module=lambda module: (
+            module.__name__ == f"{traversal_pkg.__name__}.skipped"
+        ),
+        raise_on_import_error=True,
+    )
+    assert [check.service_name for check in checks] == ["healthy"]
+    assert getattr(traversal_pkg, "import_attempts") == ["skipped", "healthy"]
+    assert f"{traversal_pkg.__name__}.skipped.child" not in sys.modules
+
+
+def test_exclude_module_prunes_even_when_include_rejects_package(
+    traversal_pkg: ModuleType,
+) -> None:
+    checks = discover_checks(
+        traversal_pkg,
+        include_module=lambda module: (
+            module.__name__ == f"{traversal_pkg.__name__}.z_healthy"
+        ),
+        exclude_module=lambda module: (
+            module.__name__ == f"{traversal_pkg.__name__}.skipped"
+        ),
+        raise_on_import_error=True,
+    )
+    assert [check.service_name for check in checks] == ["healthy"]
+    assert getattr(traversal_pkg, "import_attempts") == ["skipped", "healthy"]
+
+
+def test_exclude_root_module_prunes_entire_tree(traversal_pkg: ModuleType) -> None:
+    assert (
+        discover_checks(
+            traversal_pkg,
+            exclude_module=lambda module: module is traversal_pkg,
+            raise_on_import_error=True,
+        )
+        == []
+    )
+    assert getattr(traversal_pkg, "import_attempts") == []
+
+
+def test_exclude_module_name_prevents_package_initializer_import(
+    traversal_pkg: ModuleType,
+) -> None:
+    assert traversal_pkg.__file__ is not None
+    initializer = Path(traversal_pkg.__file__).parent / "skipped" / "__init__.py"
+    initializer.write_text(
+        "from .. import import_attempts\n"
+        "import_attempts.append('skipped')\n"
+        "raise RuntimeError('excluded initializer was imported')\n"
+    )
+    excluded_name = f"{traversal_pkg.__name__}.skipped"
+    checks = discover_checks(
+        traversal_pkg,
+        exclude_module_name=lambda name: name == excluded_name,
+        raise_on_import_error=True,
+    )
+    assert [check.service_name for check in checks] == ["healthy"]
+    assert getattr(traversal_pkg, "import_attempts") == ["healthy"]
+    assert excluded_name not in sys.modules
+    assert f"{excluded_name}.child" not in sys.modules
+
+
+def test_exclude_root_module_name_prevents_initial_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / f"excluded_pkg_{uuid.uuid4().hex}"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "raise RuntimeError('excluded root was imported')\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    assert (
+        discover_checks(
+            package.name,
+            exclude_module_name=lambda name: name == package.name,
+            raise_on_import_error=True,
+        )
+        == []
+    )
+    assert package.name not in sys.modules
+
+
+def test_exclude_root_module_name_also_prunes_module_objects(
+    traversal_pkg: ModuleType,
+) -> None:
+    assert (
+        discover_checks(
+            traversal_pkg,
+            exclude_module_name=lambda name: name == traversal_pkg.__name__,
+            raise_on_import_error=True,
+        )
+        == []
+    )
+    assert getattr(traversal_pkg, "import_attempts") == []
