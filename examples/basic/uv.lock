@@ -110,14 +110,14 @@ wheels = [
 
 [[package]]
 name = "starlette"
-version = "0.47.2"
+version = "0.52.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/04/57/d062573f391d062710d4088fa1369428c38d51460ab6fedff920efef932e/starlette-0.47.2.tar.gz", hash = "sha256:6ae9aa5db235e4846decc1e7b79c4f346adf41e9777aebeb49dfd09bbd7023d8", size = 2583948, upload-time = "2025-07-20T17:31:58.522Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c4/68/79977123bb7be889ad680d79a40f339082c1978b5cfcf62c2d8d196873ac/starlette-0.52.1.tar.gz", hash = "sha256:834edd1b0a23167694292e94f597773bc3f89f362be6effee198165a35d62933", size = 2653702, upload-time = "2026-01-18T13:34:11.062Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/1f/b876b1f83aef204198a42dc101613fefccb32258e5428b5f9259677864b4/starlette-0.47.2-py3-none-any.whl", hash = "sha256:c5847e96134e5c5371ee9fac6fdf1a67336d5815e09eb2a01fdb57a351ef915b", size = 72984, upload-time = "2025-07-20T17:31:56.738Z" },
+    { url = "https://files.pythonhosted.org/packages/81/0d/13d1d239a25cbfb19e740db83143e95c772a1fe10202dda4b76792b114dd/starlette-0.52.1-py3-none-any.whl", hash = "sha256:0029d43eb3d273bc4f83a08720b4912ea4b071087a3b48db01b7c839f7954d74", size = 74272, upload-time = "2026-01-18T13:34:09.188Z" },
 ]
 
 [[package]]
@@ -131,7 +131,7 @@ wheels = [
 
 [[package]]
 name = "watchpost"
-version = "0.1.0"
+version = "0.1.5"
 source = { editable = "../../" }
 dependencies = [
     { name = "starlette" },
@@ -146,22 +146,30 @@ cli = [
 
 [package.metadata]
 requires-dist = [
-    { name = "click", marker = "extra == 'cli'", specifier = ">=8.2.1" },
-    { name = "redis", marker = "extra == 'redis'", specifier = ">=6.4.0" },
-    { name = "rich", marker = "extra == 'cli'", specifier = ">=14.1.0" },
-    { name = "starlette", specifier = ">=0.47.2" },
-    { name = "timelength", specifier = ">=3.0.2" },
+    { name = "click", marker = "extra == 'cli'", specifier = ">=8.2.1,<9.0.0" },
+    { name = "redis", marker = "extra == 'redis'", specifier = ">=7.1.0,<7.2.0" },
+    { name = "rich", marker = "extra == 'cli'", specifier = ">=14.1.0,<15.0.0" },
+    { name = "starlette", specifier = ">=0.52.1,<0.53.0" },
+    { name = "timelength", specifier = ">=3.0.2,<3.1.0" },
 ]
 provides-extras = ["cli", "redis"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "lefthook", specifier = ">=1.12.2" },
-    { name = "licensecheck", specifier = ">=2025.1.0" },
-    { name = "mypy", specifier = ">=1.17.1" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "ruff", specifier = ">=0.12.7" },
-    { name = "testcontainers", extras = ["redis"], specifier = ">=4.12.0" },
-    { name = "ty", specifier = ">=0.0.1a17" },
+    { name = "httpx", specifier = ">=0.28.1,<0.29.0" },
+    { name = "lefthook", specifier = ">=2.0.15,<2.1.0" },
+    { name = "licensecheck", specifier = ">=2025.1.0,<2025.2.0" },
+    { name = "mypy", specifier = ">=1.17.1,<2.0.0" },
+    { name = "pytest", specifier = ">=9.0.2,<9.1.0" },
+    { name = "ruff", specifier = ">=0.15.0,<0.16.0" },
+    { name = "testcontainers", extras = ["redis"], specifier = ">=4.13.0,<5.0.0" },
+    { name = "ty", specifier = ">=0.0.1a20" },
+]
+docs = [
+    { name = "mkdocs", specifier = ">=1.6.1" },
+    { name = "mkdocs-autorefs", specifier = ">=1.4.3" },
+    { name = "mkdocs-code-validator", specifier = ">=0.2.0" },
+    { name = "mkdocs-material", specifier = ">=9.6.19" },
+    { name = "mkdocs-section-index", specifier = ">=0.3.10" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.30.0" },
 ]
