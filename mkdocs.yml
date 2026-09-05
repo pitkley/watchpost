@@ -4,6 +4,8 @@ nav:
 - Home:
   - Overview: index.md
   - Quickstart: home/quickstart.md
+  - Checkmk integration: home/checkmk.md
+  - Deployment: home/deployment.md
 - API reference: reference/api.md
 
 theme:
