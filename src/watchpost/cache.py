@@ -31,7 +31,7 @@ import os
 import pickle
 import tempfile
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Hashable
+from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -610,7 +610,11 @@ class Cache:
 
         Use either a fixed `key` or a `key_generator` to compute the cache key
         from call arguments. If `key` contains format placeholders like "{arg}",
-        they will be formatted from the function's bound arguments.
+        they will be formatted from the function's bound arguments, including defaults.
+        For `async def` functions, the awaited value is cached, and each call
+        returns a new awaitable. Exceptions and cancellation are not cached.
+        Storage access is synchronous; simultaneous cache misses may each execute
+        the function.
 
         Parameters:
             key:
@@ -636,24 +640,49 @@ class Cache:
             - If `return_expired` is True, an expired value may be returned
               once; it is then replaced with a fresh value.
         """
-        if key and key_generator:
+        if key is not None and key_generator is not None:
             raise ValueError("Only one of key or key_generator can be provided.")
-        if not key and not key_generator:
+        if key is None and key_generator is None:
             raise ValueError("Either key or key_generator must be provided.")
 
         package = package or get_caller_package()
 
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
-            @functools.wraps(func)
-            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            signature = (
+                inspect.signature(func) if isinstance(key, str) and "{" in key else None
+            )
+
+            def resolve_key(*args: P.args, **kwargs: P.kwargs) -> Hashable:
                 cache_key = key
-                if key_generator:
+                if key_generator is not None:
                     cache_key = key_generator(*args, **kwargs)
                 elif isinstance(cache_key, str) and "{" in cache_key:
                     # The key provided seems to be formattable.
-                    bound_arguments = inspect.signature(func).bind(*args, **kwargs)
+                    assert signature is not None
+                    bound_arguments = signature.bind(*args, **kwargs)
+                    bound_arguments.apply_defaults()
                     cache_key = cache_key.format(**bound_arguments.arguments)
+                return cache_key
 
+            if inspect.iscoroutinefunction(func):
+
+                @functools.wraps(func)
+                async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+                    cache_key = resolve_key(*args, **kwargs)
+                    cache_entry: CacheEntry[Any] | None = self.get(
+                        key=cache_key, package=package, return_expired=return_expired
+                    )
+                    if cache_entry is not None:
+                        return cache_entry.value
+                    value = await cast(Awaitable[Any], func(*args, **kwargs))
+                    self.store(key=cache_key, value=value, package=package, ttl=ttl)
+                    return value
+
+                return cast(Callable[P, R], async_wrapper)
+
+            @functools.wraps(func)
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                cache_key = resolve_key(*args, **kwargs)
                 cache_entry: CacheEntry[R] | None = self.get(
                     key=cache_key,
                     package=package,
