@@ -14,11 +14,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from io import StringIO
+
 import pytest
 from click.testing import CliRunner
+from rich.console import Console
 
 from watchpost import CheckResult, Environment, Watchpost, check
 from watchpost.cli import _cli
+from watchpost.result import CheckState, ExecutionResult
 from watchpost.scheduling_strategy import (
     MustRunAgainstGivenTargetEnvironmentStrategy,
 )
@@ -65,3 +69,32 @@ def test_verify_exit_status(
             assert "Check configurations verified." in result.output
     finally:
         app.shutdown()
+
+
+@pytest.mark.parametrize("state", list(CheckState))
+def test_result_table_preserves_literal_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    state: CheckState,
+) -> None:
+    console = Console(file=StringIO(), width=200, record=True)
+    monkeypatch.setattr(_cli, "Console", lambda: console)
+    _cli.display_results_table(
+        [
+            ExecutionResult(
+                piggyback_host="host",
+                service_name="[bold]service[/]",
+                service_labels={},
+                environment_name="env[/]",
+                check_state=state,
+                summary="Path: [/] and [red]literal[/red]",
+                details="details [link=example]text[/link]",
+            )
+        ]
+    )
+    rendered = console.export_text(clear=False)
+    assert "[bold]service[/]" in rendered
+    assert "env[/]" in rendered
+    assert "Path: [/] and [red]literal[/red]" in rendered
+    assert "details [link=example]text[/link]" in rendered
+    assert state.name in rendered
+    assert "\x1b[" in console.export_text(styles=True)

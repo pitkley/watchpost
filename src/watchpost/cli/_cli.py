@@ -21,6 +21,7 @@ from click.exceptions import Exit
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
+from rich.text import Text
 
 from watchpost.executor import BlockingCheckExecutor, CheckExecutor
 from watchpost.hostname import resolve_hostname
@@ -93,10 +94,10 @@ def display_results_table(results: Iterable[ExecutionResult]) -> None:
                 summary = f"{summary.strip()}\n\n{result.details}"
 
             table.add_row(
-                f"[{state_style}]{result.check_state.name}[/]",
-                result.environment_name,
-                result.service_name,
-                summary.strip(),
+                Text(result.check_state.name, style=state_style),
+                Text(result.environment_name),
+                Text(result.service_name),
+                Text(summary.strip()),
             )
             table.add_section()
 
@@ -137,12 +138,12 @@ def verify_check_configuration(app: Watchpost) -> None:
             if not isinstance(exception, InvalidCheckConfiguration):
                 table.add_row(
                     "<unknown>",
-                    str(exception),
+                    Text(str(exception)),
                 )
             else:
                 table.add_row(
-                    exception.check.name,
-                    exception.reason,
+                    Text(exception.check.name),
+                    Text(exception.reason),
                 )
             table.add_section()
 
@@ -152,13 +153,13 @@ def verify_check_configuration(app: Watchpost) -> None:
         for exception in exception_group.exceptions:
             if isinstance(exception, InvalidCheckConfiguration):
                 table.add_row(
-                    exception.check.name,
-                    str(exception.cause),
+                    Text(exception.check.name),
+                    Text(str(exception.cause)),
                 )
             else:
                 table.add_row(
                     "<unknown>",
-                    str(exception),
+                    Text(str(exception)),
                 )
             table.add_section()
 
