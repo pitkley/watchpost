@@ -119,7 +119,7 @@ Find a list of packages below
 
 - HomePage: UNKNOWN
 - Author: UNKNOWN
-- License: MIT
+- License: MIT LICENSE
 - Compatible: True
 
 ### boolean-py-5.0
@@ -329,7 +329,7 @@ Find a list of packages below
 
 - HomePage: UNKNOWN
 - Author: UNKNOWN
-- License: MIT
+- License: MIT LICENSE
 - Compatible: True
 
 ### mkdocs-material-extensions-1.3.1
@@ -343,7 +343,7 @@ Find a list of packages below
 
 - HomePage: UNKNOWN
 - Author: UNKNOWN
-- License: MIT
+- License: MIT LICENSE
 - Compatible: True
 
 ### mkdocstrings-0.30.1
@@ -420,7 +420,7 @@ Find a list of packages below
 
 - HomePage: UNKNOWN
 - Author: UNKNOWN
-- License: MIT
+- License: MIT LICENSE
 - Compatible: True
 
 ### pytest-9.0.2
