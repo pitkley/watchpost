@@ -34,7 +34,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal, Protocol, override
 
@@ -183,7 +183,8 @@ class TemplateStrategy(HostnameStrategy):
     """
     Formats a string template using fields from the `HostnameContext`.
 
-    The template is processed with `str.format(**asdict(ctx))`. You can access
+    The template is processed with `str.format` and a shallow context mapping.
+    You can access
     context fields, including nested attributes on objects such as
     `{environment.name}` or `{check.service_name}`.
 
@@ -197,7 +198,9 @@ class TemplateStrategy(HostnameStrategy):
 
     @override
     def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
-        return self.template.format(**asdict(ctx))
+        return self.template.format(
+            **{field.name: getattr(ctx, field.name) for field in fields(ctx)}
+        )
 
 
 class CompositeStrategy(HostnameStrategy):
@@ -331,7 +334,7 @@ def coerce_to_rfc1123(value: str | NoPiggybackHost) -> str:
         if not label:
             continue
         if len(label) > LABEL_MAX:
-            label = label[:LABEL_MAX]
+            label = label[:LABEL_MAX].rstrip("-")
         labels.append(label)
 
     if not labels:
@@ -350,7 +353,10 @@ def coerce_to_rfc1123(value: str | NoPiggybackHost) -> str:
     if not out:
         raise ValueError(f"Cannot coerce hostname {value!r} to RFC1123")
 
-    return ".".join(out)
+    hostname = ".".join(out)
+    if not is_rfc1123_hostname(hostname):
+        raise ValueError(f"Cannot coerce hostname {value!r} to RFC1123")
+    return hostname
 
 
 class CoercingStrategy(HostnameStrategy):
@@ -372,10 +378,14 @@ class CoercingStrategy(HostnameStrategy):
     @override
     def resolve(self, ctx: HostnameContext) -> str | NoPiggybackHost | None:
         val = self.inner.resolve(ctx)
-        return None if val is None else coerce_to_rfc1123(val)
+        if val is None or val is NO_PIGGYBACK_HOST:
+            return val
+        return coerce_to_rfc1123(val)
 
 
-HostnameInput = str | Callable[[HostnameContext], str | None] | HostnameStrategy
+HostnameInput = (
+    str | Callable[[HostnameContext], str | NoPiggybackHost | None] | HostnameStrategy
+)
 
 
 class HostnameResolutionError(Exception):
@@ -481,51 +491,25 @@ def resolve_hostname(
         result=result,
     )
 
-    # Determine candidate in precedence order
     candidate: str | NoPiggybackHost | None = None
-
-    # 1) Explicit hostname override
-    if explicit_hostname:
-        if strategy := to_strategy(explicit_hostname):
-            candidate = strategy.resolve(ctx)
-
-    # 2) Per-result override
-    if not candidate and result and result.hostname:
-        if strategy := to_strategy(result.hostname):
-            candidate = strategy.resolve(ctx)
-    else:
-        # 3) Check-level strategy
-        if check.hostname_strategy:
-            try:
-                val = check.hostname_strategy.resolve(ctx)
-                if val is NO_PIGGYBACK_HOST or (isinstance(val, str) and val):
-                    candidate = val
-            except Exception as e:
-                raise HostnameResolutionError(
-                    f"Hostname strategy failed at check level for {check.service_name}/{environment.name}: {e}"
-                ) from e
-
-        # 4) Environment-level strategy
-        if candidate is None and environment.hostname_strategy:
-            try:
-                val = environment.hostname_strategy.resolve(ctx)
-                if val is NO_PIGGYBACK_HOST or (isinstance(val, str) and val):
-                    candidate = val
-            except Exception as e:
-                raise HostnameResolutionError(
-                    f"Hostname strategy failed at environment level for {check.service_name}/{environment.name}: {e}"
-                ) from e
-
-        # 5) Watchpost-level strategy
-        if candidate is None and watchpost.hostname_strategy:
-            try:
-                val = watchpost.hostname_strategy.resolve(ctx)
-                if val is NO_PIGGYBACK_HOST or (isinstance(val, str) and val):
-                    candidate = val
-            except Exception as e:
-                raise HostnameResolutionError(
-                    f"Hostname strategy failed at watchpost level for {check.service_name}/{environment.name}: {e}"
-                ) from e
+    inputs = (
+        ("explicit", explicit_hostname),
+        ("result", result.hostname if result is not None else None),
+        ("check", check.hostname_strategy),
+        ("environment", environment.hostname_strategy),
+        ("watchpost", watchpost.hostname_strategy),
+    )
+    for level, hostname_input in inputs:
+        try:
+            strategy = to_strategy(hostname_input)
+            value = strategy.resolve(ctx) if strategy is not None else None
+        except Exception as error:
+            raise HostnameResolutionError(
+                f"Hostname strategy failed at {level} level for {check.service_name}/{environment.name}: {error}"
+            ) from error
+        if value is NO_PIGGYBACK_HOST or (isinstance(value, str) and value):
+            candidate = value
+            break
 
     if candidate is NO_PIGGYBACK_HOST:
         # If it was explicitly requested to disable piggybacking, return an
@@ -551,6 +535,8 @@ def resolve_hostname(
 
     try:
         coerced_candidate = coerce_to_rfc1123(candidate)
+        if not is_rfc1123_hostname(coerced_candidate):
+            raise ValueError("Coercion produced an invalid hostname")
         return coerced_candidate
     except ValueError as e:
         raise HostnameResolutionError(
