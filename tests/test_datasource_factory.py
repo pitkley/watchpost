@@ -928,3 +928,62 @@ def test_datasource_with_factory_no_args():
         ],
         key=lambda result: result["service_name"],
     )
+
+
+def test_factory_keys_preserve_order_repetitions_and_keyword_values():
+    assert FromFactory(TestFactory, "a", "b").cache_key(None) != FromFactory(
+        TestFactory, "b", "a"
+    ).cache_key(None)
+    assert FromFactory(TestFactory, "a").cache_key(None) != FromFactory(
+        TestFactory, "a", "a"
+    ).cache_key(None)
+    assert FromFactory(TestFactory, a=1, b=2).cache_key(None) == FromFactory(
+        TestFactory, b=2, a=1
+    ).cache_key(None)
+
+    class Collision:
+        def __hash__(self):
+            return 42
+
+    first, second = Collision(), Collision()
+    assert FromFactory(TestFactory, first).cache_key(None) != FromFactory(
+        TestFactory, second
+    ).cache_key(None)
+    assert FromFactory(TestFactory, value=first).cache_key(None) != FromFactory(
+        TestFactory, value=second
+    ).cache_key(None)
+
+
+def test_reordered_factory_arguments_create_distinct_datasources():
+    class OrderedDatasource(Datasource):
+        def __init__(self, values):
+            self.values = values
+
+    class OrderedFactory(DatasourceFactory):
+        scheduling_strategies = ()
+
+        @classmethod
+        def new(cls, *values):
+            return OrderedDatasource(values)
+
+    app = Watchpost(checks=[], execution_environment=Environment("test"))
+    app.register_datasource_factory(OrderedFactory)
+    first = app._resolve_instantiable_datasource_from_factory(
+        OrderedFactory, FromFactory(OrderedFactory, "primary", "backup")
+    ).instance()
+    second = app._resolve_instantiable_datasource_from_factory(
+        OrderedFactory, FromFactory(OrderedFactory, "backup", "primary")
+    ).instance()
+    assert first is not second
+    assert isinstance(first, OrderedDatasource)
+    assert isinstance(second, OrderedDatasource)
+    assert first.values == ("primary", "backup")
+    assert second.values == ("backup", "primary")
+
+
+@pytest.mark.parametrize(
+    "marker", [FromFactory(TestFactory, []), FromFactory(TestFactory, value={})]
+)
+def test_factory_keys_explain_unhashable_arguments(marker):
+    with pytest.raises(ValueError, match="must be hashable"):
+        marker.cache_key(None)

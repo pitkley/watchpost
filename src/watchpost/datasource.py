@@ -95,6 +95,11 @@ class DatasourceFactory(Protocol):
     """
 
 
+FactoryCacheKey = tuple[
+    type[DatasourceFactory] | None, tuple[Any, ...], frozenset[tuple[str, Any]]
+]
+
+
 class FromFactory:
     """
     Marker used with `typing.Annotated` to request a datasource from a factory.
@@ -109,7 +114,8 @@ class FromFactory:
         Annotated[MyDatasourceWithFactory, FromFactory("service")]
 
     Parameters are forwarded to the factory's `new` callable. Watchpost caches
-    the constructed datasource per factory type and argument set.
+    the constructed datasource per factory type and ordered argument values.
+    Arguments must be hashable; keyword ordering does not affect identity.
     """
 
     @overload
@@ -160,7 +166,7 @@ class FromFactory:
     def cache_key(
         self,
         type_key: type[DatasourceFactory] | None,
-    ) -> tuple[type[DatasourceFactory] | None, int, int]:
+    ) -> FactoryCacheKey:
         """
         Generate a stable cache key for this factory invocation.
 
@@ -174,8 +180,13 @@ class FromFactory:
             A tuple that identifies the factory type and the provided arguments,
             suitable for use as a cache key.
         """
-        return (
-            self.factory_type or type_key,
-            hash(frozenset(self.args)),
-            hash(frozenset(self.kwargs.items())),
-        )
+        try:
+            key = (
+                self.factory_type or type_key,
+                self.args,
+                frozenset(self.kwargs.items()),
+            )
+            hash(key)
+        except TypeError as error:
+            raise ValueError("Datasource factory arguments must be hashable") from error
+        return key
