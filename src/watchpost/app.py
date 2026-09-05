@@ -58,6 +58,7 @@ from .datasource import (
     Datasource,
     DatasourceFactory,
     DatasourceUnavailable,
+    FactoryCacheKey,
     FromFactory,
 )
 from .discover_checks import discover_checks
@@ -357,9 +358,7 @@ class Watchpost:
         self._datasource_factories: set[type] = set()
 
         self._instantiable_datasources: dict[
-            type[Datasource]
-            | type[DatasourceFactory]
-            | tuple[type[DatasourceFactory] | None, int, int],
+            type[Datasource] | type[DatasourceFactory] | FactoryCacheKey,
             _InstantiableDatasource,
         ] = {}
 
