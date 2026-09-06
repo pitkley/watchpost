@@ -20,3 +20,17 @@ Checkmk's bundled Python, so the framework need not be installed inside Checkmk.
 
 The fast tests in `tests/test_checkmk_contract.py` use lightweight API doubles;
 this Docker test verifies the foreign API and packaging behavior they cannot.
+
+## Dependency license reports
+
+Run `.tools/check-third-party-licenses.sh` to verify the dependency license policy.
+Regenerate the committed report with
+`.tools/show-third-party-licenses.sh > THIRD_PARTY_LICENSES.md` after dependency
+changes, then inspect the diff.
+
+Both scripts use the locked versions with all extras and dependency groups in an
+isolated environment. Package enumeration and license inspection run in that same
+environment, so reports do not depend on which extras are installed in the
+caller's development environment. Do not set `UV_NO_SYNC` when running them:
+the isolated environment needs its packages installed. Package size is omitted
+from the report because it varies between platforms.
