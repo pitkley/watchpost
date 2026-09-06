@@ -325,7 +325,7 @@ class Watchpost:
 
     def _resolve_instantiable_datasource(
         self,
-        datasource_type: type[_D] | type[_DF],
+        datasource_type: type[_D | _DF],
     ) -> _InstantiableDatasource:
         return self._planner._resolve_instantiable_datasource(datasource_type)
 
@@ -460,7 +460,7 @@ class Watchpost:
                         fallback_to_default_hostname_generation=self.hostname_fallback_to_default_hostname_generation,
                         coerce_into_valid_hostname=self.hostname_coerce_into_valid_hostname,
                     )
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - Collect all custom resolver failures for startup validation.
                     errors.append(
                         InvalidCheckConfiguration(
                             check,

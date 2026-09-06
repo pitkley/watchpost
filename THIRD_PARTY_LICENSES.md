@@ -1,7 +1,7 @@
 ## Info
 
 - program: licensecheck
-- version: 2025.1.0
+- version: 2026.0.8
 - license: MIT LICENSE
 
 ## Project License
@@ -14,8 +14,9 @@ Find a list of packages below
 
 |Compatible|Package|
 |:--|:--|
+|✔|annotated-types|
 |✔|anyio|
-|✔|appdirs|
+|✔|ast-serialize|
 |✔|attrs|
 |✔|babel|
 |✔|backrefs|
@@ -25,17 +26,19 @@ Find a list of packages below
 |✔|charset-normalizer|
 |✔|click|
 |✔|colorama|
+|✔|configurator|
+|✔|depgather|
 |✔|docker|
-|✔|fhconfparser|
 |✔|ghp-import|
-|✔|griffe|
+|✔|griffelib|
 |✔|h11|
-|✔|httpcore|
-|✔|httpx|
+|✔|httpcore2|
+|✔|httpx2|
 |✔|idna|
 |✔|iniconfig|
 |✔|jinja2|
 |✔|lefthook|
+|✔|librt|
 |✔|license-expression|
 |✔|licensecheck|
 |✔|loguru|
@@ -60,6 +63,9 @@ Find a list of packages below
 |✔|pathspec|
 |✔|platformdirs|
 |✔|pluggy|
+|✔|properdocs|
+|✔|pydantic|
+|✔|pydantic-core|
 |✔|pygments|
 |✔|pymdown-extensions|
 |✔|pytest|
@@ -74,121 +80,135 @@ Find a list of packages below
 |✔|rich|
 |✔|ruff|
 |✔|six|
-|✔|sniffio|
 |✔|starlette|
 |✔|testcontainers|
 |✔|timelength|
 |✔|tomli|
+|✔|truststore|
 |✔|ty|
 |✔|typing-extensions|
+|✔|typing-inspection|
 |✔|url-normalize|
 |✔|urllib3|
-|✔|uv|
 |✔|watchdog|
 |✔|wrapt|
 
-### anyio-4.11.0
+### annotated-types-0.8.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: Adrian Garcia Badaracco
 - License: MIT
 - Compatible: True
 
-### appdirs-1.4.4
+### anyio-4.15.1
 
-- HomePage: http://github.com/ActiveState/appdirs
-- Author: Trent Mick
-- License: MIT LICENSE
+- HomePage:
+- Author: Alex Grönholm
+- License: MIT
 - Compatible: True
 
-### attrs-23.2.0
+### ast-serialize-0.9.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Jukka Lehtosalo
+- License: MIT
 - Compatible: True
 
-### babel-2.17.0
+### attrs-26.1.0
+
+- HomePage:
+- Author: Hynek Schlawack
+- License: MIT
+- Compatible: True
+
+### babel-2.18.0
 
 - HomePage: https://babel.pocoo.org/
 - Author: Armin Ronacher
-- License: BSD LICENSE
+- License: BSD License
 - Compatible: True
 
-### backrefs-5.9
+### backrefs-8.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Isaac Muse
+- License: MIT
 - Compatible: True
 
 ### boolean-py-5.0
 
 - HomePage: https://github.com/bastikr/boolean.py
 - Author: Sebastian Kraemer
-- License: BSD-2-CLAUSE
+- License: BSD-2-Clause
 - Compatible: True
 
-### cattrs-24.1.3
+### cattrs-26.1.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Tin Tvrtkovic
+- License: MIT License
 - Compatible: True
 
-### certifi-2025.8.3
+### certifi-2026.7.22
 
 - HomePage: https://github.com/certifi/python-certifi
 - Author: Kenneth Reitz
-- License: MOZILLA PUBLIC LICENSE 2.0 _MPL 2.0_
+- License: Mozilla Public License 2.0 _MPL 2.0_
 - Compatible: True
 
-### charset-normalizer-3.4.3
+### charset-normalizer-3.5.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: "Ahmed R. TAHRI"
 - License: MIT
 - Compatible: True
 
-### click-8.3.0
+### click-8.5.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD-3-CLAUSE
+- HomePage:
+- Author:
+- License: BSD-3-Clause
 - Compatible: True
 
 ### colorama-0.4.6
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD LICENSE
+- HomePage:
+- Author: Jonathan Hartley
+- License: BSD License
 - Compatible: True
 
-### docker-7.1.0
+### configurator-3.2.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: APACHE SOFTWARE LICENSE
+- HomePage: https://github.com/Simplistix/configurator
+- Author: Chris Withers
+- License: MIT License
 - Compatible: True
 
-### fhconfparser-2024.1
+### depgather-0.5.0
 
-- HomePage: https://github.com/FHPythonUtils/FHConfParser
+- HomePage:
 - Author: FredHappyface
-- License: MIT LICENSE
+- License: MIT
+- Compatible: True
+
+### docker-7.2.0
+
+- HomePage:
+- Author:
+- License: Apache-2.0
 - Compatible: True
 
 ### ghp-import-2.1.0
 
 - HomePage: https://github.com/c-w/ghp-import
 - Author: Paul Joseph Davis
-- License: APACHE SOFTWARE LICENSE
+- License: Apache Software License
 - Compatible: True
 
-### griffe-1.14.0
+### griffelib-2.3.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: Timothée Mazzucotelli
 - License: ISC
 - Compatible: True
 
@@ -196,237 +216,265 @@ Find a list of packages below
 
 - HomePage: https://github.com/python-hyper/h11
 - Author: Nathaniel J. Smith
-- License: MIT LICENSE
+- License: MIT License
 - Compatible: True
 
-### httpcore-1.0.9
+### httpcore2-2.12.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD LICENSE
+- HomePage:
+- Author: Tom Christie
+- License: BSD-3-Clause
 - Compatible: True
 
-### httpx-0.28.1
+### httpx2-2.12.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD LICENSE
+- HomePage:
+- Author: Tom Christie
+- License: BSD-3-Clause
 - Compatible: True
 
-### idna-3.10
+### idna-3.19
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD LICENSE
+- HomePage:
+- Author: Kim Davies
+- License: BSD-3-Clause
 - Compatible: True
 
-### iniconfig-2.1.0
+### iniconfig-2.3.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Ronny Pfannschmidt
+- License: MIT
 - Compatible: True
 
 ### jinja2-3.1.6
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD LICENSE
+- HomePage:
+- Author:
+- License: BSD License
 - Compatible: True
 
-### lefthook-2.0.15
+### lefthook-2.1.12
 
-- HomePage: https://github.com/evilmartians/lefthook
+- HomePage:
 - Author: Evil Martians
-- License: MIT LICENSE
+- License: MIT
+- Compatible: True
+
+### librt-0.15.0
+
+- HomePage:
+- Author: Jukka Lehtosalo
+- License: MIT
 - Compatible: True
 
 ### license-expression-30.4.4
 
 - HomePage: https://github.com/aboutcode-org/license-expression
 - Author: nexB. Inc. and others
-- License: APACHE-2.0
+- License: Apache-2.0
 - Compatible: True
 
-### licensecheck-2025.1.0
+### licensecheck-2026.0.8
 
-- HomePage: https://github.com/FHPythonUtils/LicenseCheck
+- HomePage:
 - Author: FredHappyface
 - License: MIT
 - Compatible: True
 
 ### loguru-0.7.3
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Delgan
+- License: MIT License
 - Compatible: True
 
-### markdown-3.9
+### markdown-3.10.3
 
-- HomePage: UNKNOWN
+- HomePage:
 - Author: Manfred Stienstra, Yuri Takhteyev
-- License: BSD-3-CLAUSE
+- License: BSD-3-Clause
 - Compatible: True
 
-### markdown-it-py-4.0.0
+### markdown-it-py-4.2.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Chris Sewell
+- License: MIT License
 - Compatible: True
 
 ### markupsafe-3.0.3
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD-3-CLAUSE
+- HomePage:
+- Author:
+- License: BSD-3-Clause
 - Compatible: True
 
 ### mdurl-0.1.2
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Taneli Hukkinen
+- License: MIT License
 - Compatible: True
 
 ### mergedeep-1.3.4
 
 - HomePage: https://github.com/clarketm/mergedeep
 - Author: Travis Clarke
-- License: MIT LICENSE
+- License: MIT License
 - Compatible: True
 
 ### mkdocs-1.6.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD LICENSE
+- HomePage:
+- Author: Tom Christie
+- License: BSD-2-Clause
 - Compatible: True
 
-### mkdocs-autorefs-1.4.3
+### mkdocs-autorefs-1.4.4
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: Oleh Prypin
 - License: ISC
 - Compatible: True
 
-### mkdocs-code-validator-0.2.0
+### mkdocs-code-validator-0.2.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Oleh Prypin
+- License: MIT
 - Compatible: True
 
-### mkdocs-get-deps-0.2.0
+### mkdocs-get-deps-0.2.2
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Oleh Prypin
+- License: MIT
 - Compatible: True
 
-### mkdocs-material-9.6.21
+### mkdocs-material-9.7.7
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Martin Donath
+- License: MIT
 - Compatible: True
 
 ### mkdocs-material-extensions-1.3.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Isaac Muse
+- License: MIT
 - Compatible: True
 
-### mkdocs-section-index-0.3.10
+### mkdocs-section-index-0.3.12
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Oleh Prypin
+- License: MIT
 - Compatible: True
 
-### mkdocstrings-0.30.1
+### mkdocstrings-1.0.6
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: =?utf-8?q?Timoth=C3=A9e_Mazzucotelli?=
 - License: ISC
 - Compatible: True
 
-### mkdocstrings-python-1.18.2
+### mkdocstrings-python-2.0.8
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: =?utf-8?q?Timoth=C3=A9e_Mazzucotelli?=
 - License: ISC
 - Compatible: True
 
-### mypy-1.18.2
+### mypy-2.3.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Jukka Lehtosalo
+- License: MIT
 - Compatible: True
 
 ### mypy-extensions-1.1.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: 
+- HomePage:
+- Author: The mypy developers
+- License: MIT
 - Compatible: True
 
-### packaging-25.0
+### packaging-26.3
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: APACHE SOFTWARE LICENSE;; BSD LICENSE
+- HomePage:
+- Author: Donald Stufft
+- License: Apache-2.0;; BSD-2-Clause
 - Compatible: True
 
 ### paginate-0.5.7
 
 - HomePage: https://github.com/Signum/paginate
 - Author: Christoph Haas
-- License: MIT LICENSE
+- License: MIT License
 - Compatible: True
 
-### pathspec-0.12.1
+### pathspec-1.1.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MOZILLA PUBLIC LICENSE 2.0 _MPL 2.0_
+- HomePage:
+- Author: "Caleb P. Burns"
+- License: Mozilla Public License 2.0 _MPL 2.0_
 - Compatible: True
 
-### platformdirs-4.4.0
+### platformdirs-4.11.7
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author:
+- License: MIT
 - Compatible: True
 
 ### pluggy-1.6.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Holger Krekel
+- License: MIT License
 - Compatible: True
 
-### pygments-2.19.2
+### properdocs-1.6.7
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD LICENSE
+- HomePage:
+- Author: Tom Christie
+- License: BSD-2-Clause
 - Compatible: True
 
-### pymdown-extensions-10.16.1
+### pydantic-2.13.5
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Samuel Colvin
+- License: MIT
 - Compatible: True
 
-### pytest-9.0.2
+### pydantic-core-2.46.5
 
-- HomePage: UNKNOWN
-- Author: Holger Krekel, Bruno Oliveira, Ronny Pfannschmidt, Floris Bruynooghe, Brianna Laugher, Florian Bruhin, Others (See AUTHORS)
+- HomePage: https://github.com/pydantic/pydantic
+- Author: Samuel Colvin
+- License: MIT
+- Compatible: True
+
+### pygments-2.21.0
+
+- HomePage:
+- Author: Georg Brandl
+- License: BSD-2-Clause
+- Compatible: True
+
+### pymdown-extensions-11.0.2
+
+- HomePage:
+- Author: Isaac Muse
+- License: MIT
+- Compatible: True
+
+### pytest-9.1.1
+
+- HomePage:
+- Author: Brianna Laugher, Bruno Oliveira, Floris Bruynooghe, Freya Bruhin, Holger Krekel, Others (See AUTHORS), Ronny Pfannschmidt
 - License: MIT
 - Compatible: True
 
@@ -434,160 +482,160 @@ Find a list of packages below
 
 - HomePage: https://github.com/dateutil/dateutil
 - Author: Gustavo Niemeyer
-- License: APACHE SOFTWARE LICENSE;; BSD LICENSE
+- License: Apache Software License;; BSD License
 - Compatible: True
 
-### python-dotenv-1.1.1
+### python-dotenv-1.2.3
 
-- HomePage: https://github.com/theskumar/python-dotenv
+- HomePage:
 - Author: Saurabh Kumar
-- License: BSD LICENSE
+- License: BSD-3-Clause
 - Compatible: True
 
 ### pyyaml-6.0.3
 
 - HomePage: https://pyyaml.org/
 - Author: Kirill Simonov
-- License: MIT LICENSE
+- License: MIT License
 - Compatible: True
 
 ### pyyaml-env-tag-1.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: Waylan Limberg
 - License: MIT
 - Compatible: True
 
-### redis-7.1.1
+### redis-8.1.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: "Redis Inc."
+- License: MIT
 - Compatible: True
 
-### requests-2.32.5
+### requests-2.34.2
 
-- HomePage: https://requests.readthedocs.io
+- HomePage:
 - Author: Kenneth Reitz
-- License: APACHE SOFTWARE LICENSE
+- License: Apache Software License
 - Compatible: True
 
-### requests-cache-1.2.1
+### requests-cache-1.3.3
 
-- HomePage: https://github.com/requests-cache/requests-cache
-- Author: Roman Haritonov
-- License: BSD LICENSE
+- HomePage:
+- Author: Jordan Cook, Roman Haritonov
+- License: BSD-2-Clause
 - Compatible: True
 
-### requirements-parser-0.13.0
+### requirements-parser-0.13.1
 
-- HomePage: UNKNOWN
+- HomePage:
 - Author: Paul Horton
-- License: APACHE SOFTWARE LICENSE
+- License: Apache Software License
 - Compatible: True
 
-### rich-14.1.0
+### rich-15.0.0
 
-- HomePage: https://github.com/Textualize/rich
+- HomePage:
 - Author: Will McGugan
-- License: MIT LICENSE
+- License: MIT License
 - Compatible: True
 
-### ruff-0.15.0
+### ruff-0.16.6
 
 - HomePage: https://docs.astral.sh/ruff
-- Author: UNKNOWN
-- License: MIT LICENSE
+- Author: "Astral Software Inc."
+- License: MIT
 - Compatible: True
 
 ### six-1.17.0
 
 - HomePage: https://github.com/benjaminp/six
 - Author: Benjamin Peterson
-- License: MIT LICENSE
+- License: MIT License
 - Compatible: True
 
-### sniffio-1.3.1
+### starlette-1.6.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: APACHE SOFTWARE LICENSE;; MIT LICENSE
+- HomePage:
+- Author: Tom Christie
+- License: BSD-3-Clause
 - Compatible: True
 
-### starlette-0.52.1
+### testcontainers-4.15.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: BSD-3-CLAUSE
-- Compatible: True
-
-### testcontainers-4.13.1
-
-- HomePage: UNKNOWN
+- HomePage:
 - Author: Sergey Pirogov
-- License: APACHE SOFTWARE LICENSE
+- License: Apache-2.0
 - Compatible: True
 
-### timelength-3.0.2
+### timelength-3.0.4
 
-- HomePage: https://pypi.org/project/timelength/
+- HomePage:
 - Author: Etorix
-- License: MIT LICENSE
+- License: MIT
 - Compatible: True
 
-### tomli-2.2.1
+### tomli-2.4.1
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
-- License: MIT LICENSE
+- HomePage:
+- Author: Taneli Hukkinen
+- License: MIT
 - Compatible: True
 
-### ty-0.0.1a21
+### truststore-0.10.4
+
+- HomePage:
+- Author: Seth Michael Larson
+- License: MIT
+- Compatible: True
+
+### ty-0.0.78
 
 - HomePage: https://github.com/astral-sh/ty/
-- Author: UNKNOWN
-- License: MIT LICENSE
+- Author: "Astral Software Inc."
+- License: MIT License
 - Compatible: True
 
-### typing-extensions-4.15.0
+### typing-extensions-4.16.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: "Guido van Rossum, Jukka Lehtosalo, Łukasz Langa, Michael Lee"
 - License: PSF-2.0
 - Compatible: True
 
-### url-normalize-2.2.1
+### typing-inspection-0.4.4
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: Victorien Plot
 - License: MIT
 - Compatible: True
 
-### urllib3-2.5.0
+### url-normalize-3.0.0
 
-- HomePage: UNKNOWN
-- Author: UNKNOWN
+- HomePage:
+- Author: Nikolay Panov
 - License: MIT
 - Compatible: True
 
-### uv-0.8.22
+### urllib3-2.7.0
 
-- HomePage: https://pypi.org/project/uv/
-- Author: UNKNOWN
-- License: APACHE SOFTWARE LICENSE;; MIT LICENSE
+- HomePage:
+- Author: Andrey Petrov
+- License: MIT
 - Compatible: True
 
 ### watchdog-6.0.0
 
 - HomePage: https://github.com/gorakhargosh/watchdog
 - Author: Mickaël Schoentgen
-- License: APACHE SOFTWARE LICENSE
+- License: Apache Software License
 - Compatible: True
 
-### wrapt-1.17.3
+### wrapt-2.4.0
 
-- HomePage: https://github.com/GrahamDumpleton/wrapt
+- HomePage:
 - Author: Graham Dumpleton
-- License: BSD LICENSE
+- License: BSD-2-Clause
 - Compatible: True
 

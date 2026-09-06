@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import Future
 from typing import Any, override
 
 from watchpost.app import Watchpost
@@ -38,10 +39,11 @@ class FakeExecutor[T](CheckExecutor[T]):
     def __init__(self, behavior: Any):
         self._behavior = behavior
 
-    def submit(self, **kwargs: Any) -> None:
-        # No-op: we don't actually execute anything in tests
-        _ = kwargs
-        return None
+    @override
+    def submit(self, *args: Any, **kwargs: Any) -> Future[T]:
+        # No-op: these tests drive result() directly without executing checks.
+        _ = args, kwargs
+        return Future()
 
     def result(self, key: Any):
         _ = key

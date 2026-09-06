@@ -119,7 +119,7 @@ class _InstantiableDatasource[D: Datasource, DF: DatasourceFactory]:
             if self.factory_type:
                 try:
                     strategies = self.instance().scheduling_strategies
-                except Exception as error:
+                except Exception as error:  # noqa: BLE001 - Retry arbitrary user factory failures on the next poll.
                     return self.factory_type.scheduling_strategies, error
                 if strategies not in (None, Ellipsis):
                     return strategies, None
@@ -235,8 +235,7 @@ class _ResolvedCheckPlan:
                     current_execution_environment=execution_environment,
                     target_environment=target_environment,
                 )
-                if decision > final_decision:
-                    final_decision = decision
+                final_decision = max(final_decision, decision)
 
             return final_decision
         finally:
@@ -249,12 +248,12 @@ class _CheckPlanner:
     def __init__(self, default_scheduling_strategies: list[SchedulingStrategy]) -> None:
         self.default_scheduling_strategies = default_scheduling_strategies
         self._datasource_definitions: dict[
-            type[Datasource] | type[DatasourceFactory], dict[str, Any]
+            type[Datasource | DatasourceFactory], dict[str, Any]
         ] = {}
         self._datasource_factories: set[type] = set()
 
         self._instantiable_datasources: dict[
-            type[Datasource] | type[DatasourceFactory] | FactoryCacheKey,
+            type[Datasource | DatasourceFactory] | FactoryCacheKey,
             _InstantiableDatasource,
         ] = {}
 
@@ -347,7 +346,7 @@ class _CheckPlanner:
 
     def _resolve_instantiable_datasource(
         self,
-        datasource_type: type[_D] | type[_DF],
+        datasource_type: type[_D | _DF],
     ) -> _InstantiableDatasource:
         """
         Resolve a datasource or factory type into an `_InstantiableDatasource`.
@@ -438,7 +437,7 @@ class _CheckPlanner:
                 **from_factory.kwargs,
             )
 
-            if factory_type.scheduling_strategies is Ellipsis:
+            if cast(DatasourceFactory, factory_type).scheduling_strategies is Ellipsis:
                 logger.warning(
                     "The datasource-factory '%s' has no scheduling strategies defined. Please make sure that either your factory or the datasource created by your factory has them defined or explicitly set to scheduling_strategies=().",
                     factory_type,

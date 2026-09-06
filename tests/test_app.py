@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from datetime import UTC, datetime, timedelta
-from typing import override
+from typing import cast, override
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -27,12 +27,14 @@ from watchpost.datasource import Datasource, DatasourceUnavailable
 from watchpost.environment import Environment
 from watchpost.executor import BlockingCheckExecutor
 from watchpost.globals import current_app
-from watchpost.result import CheckState, ExecutionResult, ok
+from watchpost.result import CheckResult, CheckState, ExecutionResult, ok
 from watchpost.scheduling_strategy import InvalidCheckConfiguration
+from watchpost.vendored.local_proxy import LocalProxy
 
 from .utils import decode_checkmk_output
 
 TEST_ENVIRONMENT = Environment("test-env")
+current_app_proxy = cast(LocalProxy[Watchpost], current_app)
 
 
 class TestDatasource(Datasource):
@@ -66,15 +68,15 @@ def test_app_context():
 
     # Before entering the context, current_app should raise an error
     with pytest.raises(RuntimeError, match="Watchpost application is not available"):
-        _ = current_app.__name__  # type: ignore[unresolved-attribute]
+        _ = current_app_proxy.__name__
 
     # Within the context, current_app should be the app instance
     with app.app_context():
-        assert current_app._get_current_object() is app  # type: ignore[unresolved-attribute]
+        assert current_app_proxy._get_current_object() is app
 
     # After exiting the context, current_app should raise an error again
     with pytest.raises(RuntimeError, match="Watchpost application is not available"):
-        _ = current_app.__name__  # type: ignore[unresolved-attribute]
+        _ = current_app_proxy.__name__
 
 
 def test_app_context_exception_handling():
@@ -89,14 +91,14 @@ def test_app_context_exception_handling():
     # Test that the context is properly reset even if an exception occurs
     try:
         with app.app_context():
-            assert current_app._get_current_object() is app  # type: ignore[unresolved-attribute]
+            assert current_app_proxy._get_current_object() is app
             raise ValueError("Test exception")
     except ValueError:
         pass
 
     # After the exception, current_app should raise an error
     with pytest.raises(RuntimeError, match="Watchpost application is not available"):
-        _ = current_app.__name__  # type: ignore[unresolved-attribute]
+        _ = current_app_proxy.__name__
 
 
 def test_app_context_lookup_error():
@@ -106,10 +108,12 @@ def test_app_context_lookup_error():
         executor=BlockingCheckExecutor(),
     )
 
-    with pytest.raises(LookupError, match="lookup error across yield"):
-        with app.app_context():
-            with app.app_context():
-                raise LookupError("lookup error across yield")
+    with (
+        pytest.raises(LookupError, match="lookup error across yield"),
+        app.app_context(),
+        app.app_context(),
+    ):
+        raise LookupError("lookup error across yield")
 
 
 def test_run_checks_once():
@@ -615,7 +619,7 @@ def test_cache_is_used_only_if_no_fresh_results_available():
         environments=[env],
         cache_for="1s",  # cache exists but is expired below
     )
-    def my_check() -> object:
+    def my_check() -> CheckResult:
         return ok("Live result")
 
     # Pre-populate an expired cached result for this check/environment key

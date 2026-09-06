@@ -32,6 +32,7 @@ import threading
 from collections import deque
 from collections.abc import Awaitable, Callable, Hashable
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast, override
 
@@ -60,7 +61,7 @@ class AsyncioLoopThread(threading.Thread):
         try:
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
-        except BaseException as error:
+        except BaseException as error:  # noqa: BLE001 - Relay thread startup failures to the submitter.
             self.startup_error = error
             if self.loop is not None:
                 try:
@@ -234,11 +235,9 @@ class CheckExecutor[T]:
                     future.cancel()
             self.executor.shutdown(wait=True, cancel_futures=cancel_futures)
             for future in futures:
-                try:
+                # Check errors belong to result pickup, not shutdown.
+                with suppress(BaseException):
                     future.result()
-                except BaseException:
-                    # Check errors belong to result pickup, not shutdown.
-                    pass
             loop_thread = self._asyncio_loop_thread
             if loop_thread and loop_thread.loop and not loop_thread.loop.is_closed():
 
@@ -262,22 +261,24 @@ class CheckExecutor[T]:
                 ).result()
                 loop_thread.stop()
                 loop_thread.join()
-        except BaseException as error:
+        except BaseException as error:  # noqa: BLE001 - Relay background cleanup failures to shutdown callers.
             self._shutdown_error = error
 
-    def submit[**P](  # type: ignore[valid-type]
+    def submit(
         self,
         key: Hashable,
-        func: Callable[P, T | Awaitable[T]],
-        *args: P.args,
+        func: Callable[..., T | Awaitable[T]],
+        *args: Any,
         resubmit: bool = False,
-        **kwargs: P.kwargs,
-    ) -> Future:
+        **kwargs: Any,
+    ) -> Future[T]:
         """
         Submit a function to run for a key, deduplicating concurrent work.
 
-        If another job with the same key is already running and `resubmit` is
-        false, this returns the existing future instead of starting a new one.
+        With `resubmit=False`, an existing submission for the key is reused
+        until its result is collected through `result()`. After collection,
+        the next submission starts a fresh execution. Set `resubmit=True` to
+        start another execution before the previous result has been collected.
         Coroutine functions are scheduled on the background asyncio loop.
 
         Parameters:
@@ -290,13 +291,13 @@ class CheckExecutor[T]:
             *args:
                 Positional arguments passed to the callable.
             resubmit:
-                When true, always schedules a new job even if one with the same
-                key is already running.
+                When true, always schedules a new job even if a submission for
+                the same key is still running or awaiting result collection.
             **kwargs:
                 Keyword arguments passed to the callable.
 
         Returns:
-            A Future representing the running or already existing job.
+            A Future representing the new or already existing job.
         """
         with self._lock:
             if self._shutdown_thread is not None:
@@ -328,7 +329,7 @@ class CheckExecutor[T]:
                 self._async_futures.add(future)
             else:
                 future = self.executor.submit(
-                    cast(Callable[P, T], func), *args, **kwargs
+                    cast(Callable[..., T], func), *args, **kwargs
                 )
             key_state.active_futures.append(future)
             future.add_done_callback(lambda future: self._done_callback(key, future))

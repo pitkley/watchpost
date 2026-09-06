@@ -26,7 +26,7 @@ exec uv run \
   --isolated \
   --all-extras \
   --all-groups \
-  bash -o pipefail -c \
-    'uv pip freeze | licensecheck --format markdown --skip-dependencies watchpost' \
+  python .tools/third_party_licenses.py --format markdown \
   | grep -vF 'Size:' \
+  | sed 's/[[:blank:]]*$//' \
   ;

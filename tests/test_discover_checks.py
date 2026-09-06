@@ -235,11 +235,11 @@ def test_broken_package_initializer_obeys_import_error_policy(
             discover_checks(traversal_pkg, raise_on_import_error=True)
         assert isinstance(exc.value.__cause__, exception_type)
         assert str(exc.value.__cause__) == "initializer failed"
-        assert getattr(traversal_pkg, "import_attempts") == ["skipped"]
+        assert traversal_pkg.import_attempts == ["skipped"]
     else:
         checks = discover_checks(traversal_pkg, raise_on_import_error=False)
         assert [check.service_name for check in checks] == ["healthy"]
-        assert getattr(traversal_pkg, "import_attempts") == ["skipped", "healthy"]
+        assert traversal_pkg.import_attempts == ["skipped", "healthy"]
 
     assert f"{traversal_pkg.__name__}.skipped.child" not in sys.modules
 
@@ -253,7 +253,7 @@ def test_exclude_module_prunes_package_descendants(traversal_pkg: ModuleType) ->
         raise_on_import_error=True,
     )
     assert [check.service_name for check in checks] == ["healthy"]
-    assert getattr(traversal_pkg, "import_attempts") == ["skipped", "healthy"]
+    assert traversal_pkg.import_attempts == ["skipped", "healthy"]
     assert f"{traversal_pkg.__name__}.skipped.child" not in sys.modules
 
 
@@ -271,7 +271,7 @@ def test_exclude_module_prunes_even_when_include_rejects_package(
         raise_on_import_error=True,
     )
     assert [check.service_name for check in checks] == ["healthy"]
-    assert getattr(traversal_pkg, "import_attempts") == ["skipped", "healthy"]
+    assert traversal_pkg.import_attempts == ["skipped", "healthy"]
 
 
 def test_exclude_root_module_prunes_entire_tree(traversal_pkg: ModuleType) -> None:
@@ -283,7 +283,7 @@ def test_exclude_root_module_prunes_entire_tree(traversal_pkg: ModuleType) -> No
         )
         == []
     )
-    assert getattr(traversal_pkg, "import_attempts") == []
+    assert traversal_pkg.import_attempts == []
 
 
 def test_exclude_module_name_prevents_package_initializer_import(
@@ -303,7 +303,7 @@ def test_exclude_module_name_prevents_package_initializer_import(
         raise_on_import_error=True,
     )
     assert [check.service_name for check in checks] == ["healthy"]
-    assert getattr(traversal_pkg, "import_attempts") == ["healthy"]
+    assert traversal_pkg.import_attempts == ["healthy"]
     assert excluded_name not in sys.modules
     assert f"{excluded_name}.child" not in sys.modules
 
@@ -339,4 +339,4 @@ def test_exclude_root_module_name_also_prunes_module_objects(
         )
         == []
     )
-    assert getattr(traversal_pkg, "import_attempts") == []
+    assert traversal_pkg.import_attempts == []

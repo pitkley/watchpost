@@ -33,7 +33,7 @@ from watchpost.check import (
 )
 from watchpost.datasource import Datasource
 from watchpost.environment import Environment
-from watchpost.result import CheckState, ExecutionResult, Metric
+from watchpost.result import CheckResult, CheckState, ExecutionResult, Metric, ok
 
 
 class TestDatasource(Datasource):
@@ -83,9 +83,9 @@ def mock_execution_result(test_environment: Environment) -> ExecutionResult:
 def mock_check(test_environment: Environment) -> Check:
     """Standard Check for testing."""
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     return Check(
         check_function=dummy_func,
@@ -128,12 +128,7 @@ def test_expand_by_hostname_multiple_hostnames(
     """Test that expand_by_hostname creates cartesian product with multiple hostnames."""
     handler = expand_by_hostname(["host1", "host2"])
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         # Start with 2 input results
         input_results = [mock_execution_result, mock_execution_result]
         results = handler(mock_check, test_environment, input_results)
@@ -150,8 +145,6 @@ def test_expand_by_hostname_multiple_hostnames(
         host2_results = [r for r in results if r.piggyback_host == "host2"]
         assert len(host1_results) == 2
         assert len(host2_results) == 2
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_expand_by_hostname_preserves_all_fields(
@@ -202,17 +195,10 @@ def test_expand_by_hostname_empty_list(
     """Test that expand_by_hostname with empty list returns empty list."""
     handler = expand_by_hostname([])
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         results = handler(mock_check, test_environment, [mock_execution_result])
         # With empty hostname list, cartesian product yields empty list
         assert len(results) == 0
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 # Unit Tests for expand_by_name_suffix
@@ -326,12 +312,7 @@ def test_composition_hostname_then_suffix(
     hostname_handler = expand_by_hostname(["host1", "host2"])
     suffix_handler = expand_by_name_suffix([":a", ":b"])
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         # Apply hostname handler first (1 result → 2 results)
         hostname_results = hostname_handler(
             mock_check, test_environment, [mock_execution_result]
@@ -351,8 +332,6 @@ def test_composition_hostname_then_suffix(
         }
         actual = {(r.piggyback_host, r.service_name) for r in final_results}
         assert actual == expected
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_composition_suffix_then_hostname(
@@ -365,12 +344,7 @@ def test_composition_suffix_then_hostname(
     hostname_handler = expand_by_hostname(["host1", "host2"])
     suffix_handler = expand_by_name_suffix([":a", ":b"])
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         # Apply in reverse order
         suffix_results = suffix_handler(
             mock_check, test_environment, [mock_execution_result]
@@ -387,8 +361,6 @@ def test_composition_suffix_then_hostname(
         }
         actual = {(r.piggyback_host, r.service_name) for r in final_results}
         assert actual == expected
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_composition_multiple_handlers(
@@ -425,12 +397,7 @@ def test_composition_multiple_handlers(
     hostname_handler = expand_by_hostname(["host1"])
     suffix_handler = expand_by_name_suffix([":suffix"])
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         # Apply all three handlers in sequence
         results1 = hostname_handler(
             mock_check, test_environment, [mock_execution_result]
@@ -445,8 +412,6 @@ def test_composition_multiple_handlers(
         assert result.service_name == "test-service:suffix"
         assert result.details is not None
         assert "[custom marker]" in result.details
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 # Tests for Check.apply_error_handlers
@@ -457,9 +422,9 @@ def test_apply_error_handlers_no_handlers(
 ) -> None:
     """Test that apply_error_handlers returns input unchanged when no handlers."""
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     mock_check = Check(
         check_function=dummy_func,
@@ -482,9 +447,9 @@ def test_apply_error_handlers_empty_list(
 ) -> None:
     """Test that apply_error_handlers returns input unchanged with empty handlers list."""
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     mock_check = Check(
         check_function=dummy_func,
@@ -509,9 +474,9 @@ def test_apply_error_handlers_single_handler(
 ) -> None:
     """Test that apply_error_handlers correctly applies a single handler."""
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     mock_check = Check(
         check_function=dummy_func,
@@ -522,12 +487,7 @@ def test_apply_error_handlers_single_handler(
         error_handlers=[expand_by_hostname(["new-host"])],
     )
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         results = mock_check.apply_error_handlers(
             test_environment, mock_execution_result
         )
@@ -535,8 +495,6 @@ def test_apply_error_handlers_single_handler(
         assert len(results) == 1
         assert results[0].piggyback_host == "new-host"
         assert results[0].service_name == mock_execution_result.service_name
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_apply_error_handlers_multiple_handlers(
@@ -546,9 +504,9 @@ def test_apply_error_handlers_multiple_handlers(
 ) -> None:
     """Test that apply_error_handlers chains multiple handlers correctly."""
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     mock_check = Check(
         check_function=dummy_func,
@@ -562,12 +520,7 @@ def test_apply_error_handlers_multiple_handlers(
         ],
     )
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         results = mock_check.apply_error_handlers(
             test_environment, mock_execution_result
         )
@@ -584,8 +537,6 @@ def test_apply_error_handlers_multiple_handlers(
         }
         actual = {(r.piggyback_host, r.service_name) for r in results}
         assert actual == expected
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 # Tests for @check Decorator Integration
@@ -603,9 +554,9 @@ def test_check_decorator_with_error_handlers(
         cache_for=None,
         error_handlers=[expand_by_hostname(["host1", "host2"])],
     )
-    def test_check_func(test_datasource: TestDatasource) -> None:
+    def test_check_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     # Verify check was created with error_handlers
     assert test_check_func.error_handlers is not None
@@ -613,12 +564,7 @@ def test_check_decorator_with_error_handlers(
     assert callable(test_check_func.error_handlers[0])
 
     # Verify handler works
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         result = ExecutionResult(
             piggyback_host="original",
             service_name="test_service",
@@ -634,8 +580,6 @@ def test_check_decorator_with_error_handlers(
         results = test_check_func.apply_error_handlers(test_environment, result)
         assert len(results) == 2
         assert {r.piggyback_host for r in results} == {"host1", "host2"}
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_check_decorator_without_error_handlers(test_environment: Environment) -> None:
@@ -647,9 +591,9 @@ def test_check_decorator_without_error_handlers(test_environment: Environment) -
         environments=[test_environment],
         cache_for=None,
     )
-    def test_check_func(test_datasource: TestDatasource) -> None:
+    def test_check_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     # error_handlers should be None or empty list
     assert (
@@ -667,9 +611,9 @@ def test_check_decorator_empty_error_handlers(test_environment: Environment) -> 
         cache_for=None,
         error_handlers=[],
     )
-    def test_check_func(test_datasource: TestDatasource) -> None:
+    def test_check_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     # Should have empty list
     assert test_check_func.error_handlers == []
@@ -706,9 +650,9 @@ def test_custom_error_handler(
             transformed.append(new_result)
         return transformed
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     mock_check = Check(
         check_function=dummy_func,
@@ -762,9 +706,9 @@ def test_custom_error_handler_modifies_state(test_environment: Environment) -> N
             transformed.append(new_result)
         return transformed
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     mock_check = Check(
         check_function=dummy_func,
@@ -803,9 +747,9 @@ def test_handler_preserves_environment_name(
 ) -> None:
     """Test that environment_name is correct in all results after handler expansion."""
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     mock_check = Check(
         check_function=dummy_func,
@@ -819,12 +763,7 @@ def test_handler_preserves_environment_name(
         ],
     )
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         results = mock_check.apply_error_handlers(
             test_environment, mock_execution_result
         )
@@ -832,8 +771,6 @@ def test_handler_preserves_environment_name(
         # All results should have the correct environment name
         for result in results:
             assert result.environment_name == test_environment.name
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_expand_by_hostname_with_different_strategies(
@@ -849,9 +786,9 @@ def test_expand_by_hostname_with_different_strategies(
         hostname="check-{service_name}",  # Template strategy
         error_handlers=[expand_by_hostname(["host1"])],
     )
-    def test_check_func(test_datasource: TestDatasource) -> None:
+    def test_check_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     result = ExecutionResult(
         piggyback_host="original",
@@ -882,9 +819,9 @@ def test_many_hostnames_many_suffixes(
 ) -> None:
     """Test performance with many hostnames and suffixes."""
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     # 5 input results, 10 hostnames, 10 suffixes = 500 output results
     mock_check = Check(
@@ -899,12 +836,7 @@ def test_many_hostnames_many_suffixes(
         ],
     )
 
-    import watchpost.check
-
-    original_app = getattr(watchpost.check, "current_app", None)
-    watchpost.check.current_app = mock_watchpost
-
-    try:
+    with patch("watchpost.check.current_app", mock_watchpost):
         # Start with 5 input results
         input_results = [mock_execution_result] * 5
 
@@ -922,8 +854,6 @@ def test_many_hostnames_many_suffixes(
         # Verify structure
         assert len({r.piggyback_host for r in final_results}) == 10  # 10 unique hosts
         assert len({r.service_name for r in final_results}) == 10  # 10 unique suffixes
-    finally:
-        setattr(watchpost.check, "current_app", original_app)
 
 
 def test_deep_handler_chain(
@@ -959,9 +889,9 @@ def test_deep_handler_chain(
 
         return handler
 
-    def dummy_func(test_datasource: TestDatasource) -> None:
+    def dummy_func(test_datasource: TestDatasource) -> CheckResult:
         _ = test_datasource
-        return None
+        return ok("unused")
 
     # Chain of 10 identity handlers
     mock_check = Check(

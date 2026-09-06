@@ -81,7 +81,7 @@ def test_blocking_result_wakes_when_shutdown_cancels_queued_thread_work():
         waiting.set()
         try:
             executor.result("queued")
-        except BaseException as error:
+        except CancelledError as error:
             errors.append(error)
         finally:
             finished.set()
@@ -153,7 +153,7 @@ def test_async_loop_installation_failure_closes_loop_and_allows_shutdown(monkeyp
     executor = CheckExecutor()
     try:
         with pytest.raises(RuntimeError, match="Could not start"):
-            executor.asyncio_loop
+            _ = executor.asyncio_loop
         executor.shutdown(wait=False)
         assert executor._shutdown_thread is not None
         executor._shutdown_thread.join(timeout=5)

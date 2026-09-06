@@ -29,6 +29,7 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from watchpost import CheckResult, Environment, Watchpost, check, ok, warn
+from watchpost.check import Check
 from watchpost.executor import BlockingCheckExecutor
 from watchpost.hostname import NoPiggybackHostStrategy
 from watchpost.result import Boundaries, CheckState, ExecutionResult, Metric, Thresholds
@@ -72,23 +73,24 @@ def plugin(monkeypatch):
     ):
         monkeypatch.setitem(sys.modules, name, ModuleType(name))
     api = sys.modules["cmk.agent_based.v2"]
-    for name, value in dict(
-        AgentSection=SimpleNamespace,
-        CheckPlugin=SimpleNamespace,
-        CheckResult=list,
-        IgnoreResultsError=LookupError,
-        Metric=ApiMetric,
-        Result=ApiResult,
-        Service=ApiService,
-        ServiceLabel=ApiLabel,
-        State=CheckState,
-        StringTable=list,
-    ).items():
+    for name, value in {
+        "AgentSection": SimpleNamespace,
+        "CheckPlugin": SimpleNamespace,
+        "CheckResult": list,
+        "IgnoreResultsError": LookupError,
+        "Metric": ApiMetric,
+        "Result": ApiResult,
+        "Service": ApiService,
+        "ServiceLabel": ApiLabel,
+        "State": CheckState,
+        "StringTable": list,
+    }.items():
         setattr(api, name, value)
-    setattr(
+    monkeypatch.setattr(
         sys.modules["cmk.utils.log"],
         "console",
         SimpleNamespace(error=lambda _message: None),
+        raising=False,
     )
     path = (
         Path(__file__).resolve().parents[1]
@@ -206,7 +208,7 @@ def test_source_host_checks_and_synthetic_output_stay_outside_piggyback_hosts(
     def target_check() -> CheckResult:
         return ok("piggyback result")
 
-    checks = (
+    checks: list[Check | ModuleType] = (
         [source_check, target_check] if source_first else [target_check, source_check]
     )
     with BlockingCheckExecutor() as executor:

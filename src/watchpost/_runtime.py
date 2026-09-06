@@ -58,7 +58,7 @@ class _CheckRuntime:
         max_workers: int | None,
         check_cache_storage: Storage | None,
     ) -> None:
-        self.executor = (
+        self.executor: CheckExecutor[list[ExecutionResult]] = (
             executor if executor is not None else CheckExecutor(max_workers=max_workers)
         )
         self._owned_executor = self.executor if executor is None else None
@@ -220,7 +220,7 @@ class _CheckRuntime:
                     check_definition=check.invocation_information,
                 ),
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - Convert arbitrary user check failures into CRIT results.
             maybe_execution_results = check.apply_error_handlers(
                 environment,
                 ExecutionResult(
