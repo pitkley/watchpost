@@ -1,5 +1,6 @@
 #!/bin/bash
 # Copyright 2025 TAKKT Industrial & Packaging GmbH
+# Copyright 2026 Pit Kleyersburg <pitkley@googlemail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +18,15 @@
 
 set -euo pipefail
 
+# Enumerate packages and inspect their metadata in the same clean environment.
+# A separate licensecheck process in the caller's environment may otherwise
+# combine local metadata with PyPI fallbacks and produce a different report.
 exec uv run \
+  --locked \
   --isolated \
   --all-extras \
   --all-groups \
-    uv pip freeze \
-  | uv run licensecheck --format markdown --skip-dependencies watchpost \
+  bash -o pipefail -c \
+    'uv pip freeze | licensecheck --format markdown --skip-dependencies watchpost' \
   | grep -vF 'Size:' \
   ;
