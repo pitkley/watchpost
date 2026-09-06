@@ -21,7 +21,7 @@ from typing import cast
 
 import pytest
 import redis
-from testcontainers.redis import RedisContainer
+from testcontainers.community.redis import RedisContainer
 
 from watchpost.cache import (
     Cache,

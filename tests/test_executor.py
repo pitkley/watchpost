@@ -407,6 +407,7 @@ def test_shutdown_wait_drains_async_work_and_closes_loop():
     assert finished.is_set()
     assert future.result() == 42
     assert loop.is_closed()
+    assert executor._asyncio_loop_thread is not None
     assert not executor._asyncio_loop_thread.is_alive()
     executor.shutdown(wait=True)
     with pytest.raises(RuntimeError, match="shut down"):
@@ -445,6 +446,8 @@ def test_async_loop_startup_failure_does_not_hang(monkeypatch):
         raise OSError("cannot create loop")
 
     monkeypatch.setattr(asyncio, "new_event_loop", fail)
-    with CheckExecutor() as executor:
-        with pytest.raises(RuntimeError, match="Could not start"):
-            executor.asyncio_loop
+    with (
+        CheckExecutor() as executor,
+        pytest.raises(RuntimeError, match="Could not start"),
+    ):
+        _ = executor.asyncio_loop

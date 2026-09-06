@@ -26,6 +26,5 @@ exec uv run \
   --isolated \
   --all-extras \
   --all-groups \
-  bash -o pipefail -c \
-    'uv pip freeze | licensecheck --zero --skip-dependencies watchpost' \
+  python .tools/third_party_licenses.py --zero \
   ;

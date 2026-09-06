@@ -45,6 +45,7 @@ import typing as t
 from contextvars import ContextVar
 from functools import partial
 from operator import attrgetter
+from types import FunctionType
 
 T = t.TypeVar("T")
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
@@ -105,7 +106,9 @@ class _ProxyLookup:
     def __set_name__(self, owner: LocalProxy[t.Any], name: str) -> None:
         self.name = name
 
-    def __get__(self, instance: LocalProxy[t.Any], owner: type | None = None) -> t.Any:
+    def __get__(
+        self, instance: LocalProxy[t.Any] | None, owner: type | None = None
+    ) -> t.Any:
         if instance is None:
             if self.class_value is not None:
                 return self.class_value
@@ -118,7 +121,8 @@ class _ProxyLookup:
             if self.fallback is None:
                 raise
 
-            fallback = self.fallback.__get__(instance, owner)
+            # The fallback callbacks supplied below are Python functions.
+            fallback = t.cast(FunctionType, self.fallback).__get__(instance, owner)
 
             if self.is_attr:
                 # __class__ and __doc__ are attributes, not methods.
@@ -165,7 +169,7 @@ class _ProxyIOp(_ProxyLookup):
                 f(self, other)  # type: ignore
                 return instance
 
-            return i_op.__get__(obj, type(obj))  # type: ignore
+            return i_op.__get__(obj, type(obj))
 
         self.bind_f = bind_f  # type: ignore[assignment]
 

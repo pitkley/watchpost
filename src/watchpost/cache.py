@@ -479,7 +479,7 @@ class RedisStorage(Storage):
         if self._use_redis_ttl and entry.ttl is not None and entry.added_at is not None:
             expiry_seconds = int(entry.ttl.total_seconds())
             if expiry_seconds > 0:
-                self.redis.setex(redis_key, expiry_seconds, data)
+                self.redis.set(redis_key, data, ex=expiry_seconds)
             else:
                 # If the entry is already expired, ensure we don't hold a
                 # potentially old version in Redis anymore.

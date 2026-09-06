@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 
-from timelength import TimeLength  # type: ignore
+from timelength import TimeLength
 
 import watchpost
 

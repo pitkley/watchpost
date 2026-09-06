@@ -36,7 +36,7 @@ import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal, Protocol, override
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, override
 
 if TYPE_CHECKING:
     from .app import Watchpost
@@ -424,8 +424,8 @@ def to_strategy(value: HostnameInput | None) -> HostnameStrategy | None:
     if isinstance(value, str):
         return TemplateStrategy(value)
     if hasattr(value, "resolve"):
-        # Assume it matches the protocol
-        return value
+        # Custom resolvers are checked structurally at runtime.
+        return cast(HostnameStrategy, value)
     if callable(value):
         return FunctionStrategy(value)
 

@@ -25,7 +25,6 @@ Notes:
 """
 
 from collections.abc import Hashable
-from typing import Any
 
 from .hostname import HostnameInput, to_strategy
 
@@ -73,7 +72,7 @@ class Environment:
         self.hostname_strategy = to_strategy(hostname)
         self.metadata = metadata
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         """
         Compare environments by name, hostname strategy, and metadata.
 
