@@ -8,6 +8,8 @@ nav:
   - Deployment: home/deployment.md
 - API reference: reference/api.md
 - Development: development/architecture.md
+- Release notes:
+  - "0.2.0": release-notes/0.2.0.md
 
 theme:
   name: "material"
