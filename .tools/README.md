@@ -13,6 +13,15 @@ External actions use immutable commit SHAs with release-version comments.
 Renovate maintains those pins and the lint-tool versions in the script.
 Repository-local reusable workflows follow the checked-out commit.
 
+## Release validation
+
+Run `uv run --no-project python .tools/check-release.py v0.2.0rc1` from the
+repository root to check that a proposed release tag matches `project.version`.
+It accepts canonical final, alpha, beta, and RC versions and prints GitHub
+Actions metadata only after validation succeeds. The release workflow uses the
+same command before building and publishing. It does not change files or publish.
+See [RELEASING.md](../RELEASING.md) for the complete release procedure.
+
 ## Checkmk integration contract
 
 Run `.tools/check-checkmk-contract.sh` from the repository root with Docker and

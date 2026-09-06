@@ -77,6 +77,17 @@ HTTP collection scripts.
 
 ### Docker
 
+Release images include both Watchpost and Checkmk versions in their tags, for
+example `ghcr.io/pitkley/watchpost/checkmk:0.2.0rc1-checkmk-2.4.0p30` for an RC or
+`:0.2.0-checkmk-2.4.0p30` for its final release, once published. Choose the release
+you have tested with your Watchpost applications. Exact image contents can be
+pinned using the image's registry digest (`@sha256:...`).
+
+The `edge-checkmk-2.4.0p30` tag follows development on `main`. The old `latest`
+and Checkmk-only tags stay on their existing images and do not receive the 0.2
+plugin. Existing consumers upgrade by explicitly changing their image reference
+and replacing the container after pulling the selected image.
+
 In another terminal, obtain a Watchpost repository checkout and build its image:
 
 ```sh

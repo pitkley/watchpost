@@ -9,6 +9,10 @@ name: Release
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   ci:
     # Keep this syntax until actionlint supports $/: rhysd/actionlint#711.
@@ -18,6 +22,8 @@ jobs:
     name: Build distribution packages
     runs-on: ubuntu-latest
     needs: ci
+    outputs:
+      prerelease: ${{ steps.release.outputs.prerelease }}
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -29,6 +35,10 @@ jobs:
 
     - name: Set up Python
       run: uv python install
+
+    - name: Validate release tag against package version
+      id: release
+      run: uv run --no-project python .tools/check-release.py "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
     - name: Build sdist and wheel
       run: uv build
@@ -62,6 +72,7 @@ jobs:
       with:
         repository-url: https://test.pypi.org/legacy/
         attestations: true
+        skip-existing: true
 
   publish-pypi:
     name: Publish to PyPI
@@ -84,11 +95,21 @@ jobs:
       uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
       with:
         attestations: true
+        skip-existing: true
+
+  publish-image:
+    name: Publish versioned Checkmk image
+    needs: publish-pypi
+    permissions:
+      contents: read
+      packages: write
+    # Keep this syntax until actionlint supports $/: rhysd/actionlint#711.
+    uses: ./.github/workflows/docker.yml # zizmor: ignore[self-repository]
 
   github-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: publish-pypi
+    needs: [build, publish-image]
     permissions:
       contents: write
       id-token: write
@@ -109,13 +130,14 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
+        PRERELEASE: ${{ needs.build.outputs.prerelease }}
       run: |
         if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
           gh release upload "$GITHUB_REF_NAME" dist/* --clobber
         else
           flags=(--verify-tag --generate-notes)
-          case "$GITHUB_REF_NAME" in
-            *alpha*|*beta*|*rc*) flags+=(--prerelease) ;;
-          esac
+          if [ "$PRERELEASE" = true ]; then
+            flags+=(--prerelease)
+          fi
           gh release create "$GITHUB_REF_NAME" dist/* "${flags[@]}"
         fi
