@@ -1,7 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
   ],
   "dependencyDashboard": false,
   "minimumReleaseAge": "7 days",
@@ -13,15 +14,24 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": [
-        "^\\.github/workflows/docker\\.yml$"
-      ],
       "matchStrings": [
         "CHECKMK_VERSION:\\s*\"?(?<currentValue>[^\"\\s]+)\"?"
       ],
       "depNameTemplate": "checkmk/check-mk-raw",
       "datasourceTemplate": "docker",
-      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)p(?<build>\\d+)$"
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)p(?<build>\\d+)$",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/docker\\.yml$/"
+      ]
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.tools\\/check-workflows\\.sh$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z_]+=\"(?<currentValue>[^\"]+)\""
+      ]
     }
   ],
   "prConcurrentLimit": 5,

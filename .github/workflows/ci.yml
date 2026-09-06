@@ -1,6 +1,6 @@
 ---
 name: CI
-on:
+"on":
   push:
     branches:
     - main
@@ -10,14 +10,36 @@ on:
     - main
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
+  workflows:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Install uv
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+    - name: Set up Go for actionlint
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: "1.27.1"
+        cache: false
+    - name: Check workflow syntax and action pinning
+      run: .tools/check-workflows.sh
+
   lockfile-check:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
     - name: Check lockfile is up-to-date
       run: uv lock --check
 
@@ -25,7 +47,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Check license comments
       run: |
         ./.tools/check-license-comments.sh
@@ -34,9 +58,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
     - name: Set up Python
       run: uv python install
 
@@ -48,8 +74,7 @@ jobs:
       run: .tools/show-third-party-licenses.sh > ./THIRD_PARTY_LICENSES.md
     - name: Verify `THIRD_PARTY_LICENSES.md` is up-to-date
       run: |
-        git diff --exit-code ./THIRD_PARTY_LICENSES.md
-        if [ $? -ne 0 ]; then
+        if ! git diff --exit-code ./THIRD_PARTY_LICENSES.md; then
           echo "THIRD_PARTY_LICENSES.md is out of date. Please run '.tools/show-third-party-licenses.sh > ./THIRD_PARTY_LICENSES.md' locally, compare what has changed and commit the changes."
           exit 1
         fi
@@ -58,9 +83,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
     - name: Set up Python
       run: uv python install
 
@@ -74,15 +101,17 @@ jobs:
       run: uv run mypy examples/ src/
 
     - name: yamllint
-      uses: frenck/action-yamllint@v1.5.0
+      uses: frenck/action-yamllint@34b4bbcaeabedcfefad6adea8c5bbc42af0e2d47 # v1.5.0
 
   tests:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
     - name: Set up Python
       run: uv python install
 
@@ -93,9 +122,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
     - name: Set up Python
       run: uv python install
 
@@ -106,14 +137,30 @@ jobs:
       working-directory: ./examples/basic
       run: uv run watchpost --app basic:app run-checks
 
+  disk-cache-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Install uv
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+    - name: Set up Python
+      run: uv python install
+    - name: Test disk-cache publication, expiry, and process locking
+      run: uv run pytest -m "not docker" tests/test_disk_cache_atomic.py tests/test_cache.py
+
   checkmk-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
     - name: Set up Python
       run: uv python install
     - name: Verify the built image and Checkmk plugin contract
@@ -123,9 +170,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
     - name: Set up Python
       run: uv python install
 

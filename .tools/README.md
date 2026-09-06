@@ -1,5 +1,18 @@
 This folder contains various scripts and configurations, used by CI or otherwise.
 
+## GitHub Actions workflows
+
+Run `.tools/check-workflows.sh` from the repository root with Go and uv installed.
+It runs pinned versions of actionlint for workflow syntax and expressions, then
+zizmor for offline workflow audits, including full SHA pinning. When ShellCheck
+is installed, actionlint also checks inline shell commands; GitHub's Ubuntu
+runners provide it.
+The same command runs in CI. The first local run downloads the lint tools.
+
+External actions use immutable commit SHAs with release-version comments.
+Renovate maintains those pins and the lint-tool versions in the script.
+Repository-local reusable workflows follow the checked-out commit.
+
 ## Checkmk integration contract
 
 Run `.tools/check-checkmk-contract.sh` from the repository root with Docker and
