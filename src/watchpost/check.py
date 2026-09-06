@@ -44,7 +44,7 @@ import io
 import json
 import typing
 from collections.abc import Awaitable, Callable, Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -82,6 +82,11 @@ CheckFunctionResult = (
 # Datasource parameters may be heterogeneous, keyword-only, or absent. Their
 # injectable names and annotations are validated by Watchpost at runtime.
 CheckFunction = Callable[..., CheckFunctionResult | Awaitable[CheckFunctionResult]]
+
+
+class _NamedFunction(Protocol):
+    __module__: str
+    __qualname__: str
 
 
 class ErrorHandler(Protocol):
@@ -297,6 +302,10 @@ class Check:
     id: str | None = None
     """Optional stable identity for generated checks with otherwise identical names."""
 
+    _check_function_signature: inspect.Signature = field(
+        init=False, repr=False, compare=False
+    )
+
     @property
     def identity(self) -> str:
         """Stable execution/cache identity, independent of object memory addresses.
@@ -332,7 +341,8 @@ class Check:
         keys use ``identity``.
         """
 
-        return f"{self.check_function.__module__}.{self.check_function.__qualname__}"
+        function = cast(_NamedFunction, self.check_function)
+        return f"{function.__module__}.{function.__qualname__}"
 
     @property
     def signature(self) -> inspect.Signature:
@@ -340,7 +350,7 @@ class Check:
         Returns the cached `inspect.Signature` of the check function.
         """
 
-        return self._check_function_signature  # type: ignore[attr-defined]
+        return self._check_function_signature
 
     @property
     def type_hints(self) -> dict[str, Any]:
@@ -414,7 +424,7 @@ class Check:
             **datasources,
         }
 
-        if "environment" in self._check_function_signature.parameters:  # type: ignore[attr-defined]
+        if "environment" in self._check_function_signature.parameters:
             kwargs["environment"] = environment
 
         return kwargs

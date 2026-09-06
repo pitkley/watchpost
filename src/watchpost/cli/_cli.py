@@ -68,7 +68,7 @@ def _get_check_hostnames(
                         )
                     )
                 else:
-                    raise e
+                    raise
 
     if errors:
         raise ExceptionGroup("Failed to resolve hostnames", errors)

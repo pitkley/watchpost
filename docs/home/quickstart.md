@@ -60,10 +60,10 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
 
 1. Add a HTTP client dependency.
 
-    We use httpx and its `AsyncClient` to demonstrate async checks, but you can use any HTTP client (async or sync) for your own checks.
+    We use httpx2 and its `AsyncClient` to demonstrate async checks, but you can use any HTTP client (async or sync) for your own checks.
 
     ```sh
-    uv add httpx
+    uv add httpx2
     ```
 
 2. Edit `my-watchpost/src/my_watchpost/__init__.py` to:
@@ -76,7 +76,7 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
     ```python {linenums="1" hl_lines="11-17 20-25 27 33-40 42 47 51"}
     from contextlib import asynccontextmanager
 
-    import httpx
+    import httpx2
 
     from watchpost import check, crit, ok, Datasource, EnvironmentRegistry, Watchpost
 
@@ -84,12 +84,12 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
     PRODUCTION = ENVIRONMENTS.new("production")
 
 
-    class HttpxClientFactory(Datasource):  # (1)
+    class Httpx2ClientFactory(Datasource):  # (1)
         scheduling_strategies = ()
 
         @asynccontextmanager
         async def client(self):
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx2.AsyncClient(timeout=10.0) as client:
                 yield client
 
 
@@ -100,7 +100,7 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
         cache_for="5m",
     )
     async def example_com_http_status(
-        client_factory: HttpxClientFactory,  # (3)
+        client_factory: Httpx2ClientFactory,  # (3)
     ):
         async with client_factory.client() as client:
             response = await client.get("https://www.example.com")
@@ -124,10 +124,10 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
         ],
         execution_environment=PRODUCTION,
     )
-    app.register_datasource(HttpxClientFactory)  # (7)
+    app.register_datasource(Httpx2ClientFactory)  # (7)
     ```
 
-    1. Define a datasource that constructs httpx clients.
+    1. Define a datasource that constructs httpx2 clients.
        You may wonder why this is a separate class instead of creating the client directly inside the check. In real projects your datasources often encapsulate more context (for example, which environment the client can run in) or wrap an API with domain-specific helpers. Keeping that logic in a datasource makes your checks simpler and easier to test.
 
     2. Use the `@check` decorator to define your check:
@@ -147,7 +147,7 @@ Now let’s add a first check that verifies whether <https://www.example.com> is
 
     ```console
     $ uv run watchpost --app my_watchpost:app list-checks
-    my_watchpost.example_com_http_status(client_factory: my_watchpost.HttpxClientFactory)
+    my_watchpost.example_com_http_status(client_factory: my_watchpost.Httpx2ClientFactory)
     $ uv run watchpost --app my_watchpost:app run-checks
                            Check Execution Results
     ┏━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓

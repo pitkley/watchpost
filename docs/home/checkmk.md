@@ -35,9 +35,7 @@ from watchpost import (
 from watchpost.result import Boundaries
 
 environments = EnvironmentRegistry()
-production = environments.new(
-    "production", hostname="watchpost-example-production"
-)
+production = environments.new("production", hostname="watchpost-example-production")
 
 
 @check(

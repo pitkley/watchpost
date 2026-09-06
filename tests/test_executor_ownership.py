@@ -31,8 +31,8 @@ def test_replacing_executor_preserves_actual_resource_ownership() -> None:
         app.shutdown()
         assert loop.is_closed()
         with pytest.raises(RuntimeError, match="shut down"):
-            owned.submit("closed", lambda: [])
-        assert supplied.submit("open", lambda: []).result(timeout=2) == []
+            owned.submit("closed", list)
+        assert supplied.submit("open", list).result(timeout=2) == []
     finally:
         owned.shutdown(wait=True, cancel_futures=True)
         supplied.shutdown(wait=True, cancel_futures=True)
@@ -47,8 +47,8 @@ def test_replacing_supplied_executor_closes_neither_caller_resource() -> None:
     try:
         app.executor = second
         app.shutdown()
-        assert first.submit("first", lambda: []).result(timeout=2) == []
-        assert second.submit("second", lambda: []).result(timeout=2) == []
+        assert first.submit("first", list).result(timeout=2) == []
+        assert second.submit("second", list).result(timeout=2) == []
     finally:
         first.shutdown(wait=True, cancel_futures=True)
         second.shutdown(wait=True, cancel_futures=True)

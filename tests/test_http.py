@@ -288,9 +288,10 @@ def test_failed_startup_closes_owned_executor():
 
     app = Watchpost(checks=[], execution_environment=TEST_ENVIRONMENT)
     loop = app.executor.asyncio_loop
-    with patch.object(
-        app, "verify_check_scheduling", side_effect=ValueError("invalid")
+    with (
+        patch.object(app, "verify_check_scheduling", side_effect=ValueError("invalid")),
+        pytest.raises(ValueError, match="invalid"),
+        TestClient(app),
     ):
-        with pytest.raises(ValueError, match="invalid"), TestClient(app):
-            pass
+        pass
     assert loop.is_closed()
