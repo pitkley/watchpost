@@ -58,6 +58,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    # CLI tests and type checks require these even without the cli extra.
+    # Their version constraints remain in project.optional-dependencies.cli.
+    "click",
+    "rich",
     "httpx>=0.28.1,<0.29.0",
     "lefthook>=2.0.15,<2.1.0",
     "licensecheck>=2025.1.0,<2025.2.0",

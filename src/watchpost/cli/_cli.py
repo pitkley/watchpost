@@ -17,7 +17,7 @@
 
 from collections.abc import Iterable
 
-import click  # type: ignore
+import click
 from click.exceptions import Exit
 from rich.console import Console
 from rich.live import Live
