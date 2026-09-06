@@ -52,11 +52,17 @@ gh release view "v$RELEASE_VERSION"
 uv run --isolated --no-project --with "watchpost[cli]==$RELEASE_VERSION" \
   python -c 'from importlib.metadata import version; print(version("watchpost"))'
 docker buildx imagetools inspect \
-  "ghcr.io/pitkley/watchpost/checkmk:$RELEASE_VERSION-checkmk-2.4.0p30"
+  "ghcr.io/pitkley/watchpost/checkmk:$RELEASE_VERSION-checkmk-2.4.0p36"
 ```
 
 Use the Checkmk version configured in `.github/workflows/docker.yml` if it changes.
 `main` updates only `edge-checkmk-…`; legacy `latest` and Checkmk-only tags stay unchanged.
+
+Release notes start empty. Generate and review them when needed, then attach the file:
+
+```sh
+gh release edit "v$RELEASE_VERSION" --notes-file release-notes/0.2.0.md
+```
 
 **Retry:** use **Re-run failed jobs** on the same Release run. If a fix is needed,
 prepare a new RC/patch version; never move a published tag.
