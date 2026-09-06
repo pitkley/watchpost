@@ -159,6 +159,9 @@ Start with the [quickstart](docs/home/quickstart.md), follow the
 [deployment and runtime guide](docs/home/deployment.md) for polling, caching,
 worker behavior, timeouts, and shutdown.
 
+Maintainers can follow [RELEASING.md](RELEASING.md) to prepare RCs and final
+releases, publish matching Checkmk images, and handle interrupted releases.
+
 ## License
 
 Watchpost is licensed under the Apache License, Version 2.0, (see [LICENSE](LICENSE) or <https://www.apache.org/licenses/LICENSE-2.0>).

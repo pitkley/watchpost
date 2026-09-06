@@ -5,6 +5,10 @@ name: Docker
   push:
     branches:
     - main
+  workflow_call:
+
+permissions:
+  contents: read
 
 env:
   CHECKMK_VERSION: "2.4.0p30"
@@ -23,9 +27,11 @@ jobs:
       uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
       with:
         images: ghcr.io/pitkley/watchpost/checkmk
+        # Legacy latest and Checkmk-only tags stay on their existing images.
+        flavor: latest=false
         tags: |
-          type=raw,value=latest
-          type=raw,value=${{ env.CHECKMK_VERSION }}
+          type=raw,value=edge-checkmk-${{ env.CHECKMK_VERSION }},enable=${{ github.ref == 'refs/heads/main' }}
+          type=pep440,pattern={{version}},suffix=-checkmk-${{ env.CHECKMK_VERSION }}
     - name: Login to GitHub Container Registry
       uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
       with:
@@ -39,5 +45,7 @@ jobs:
         file: "Dockerfile.checkmk"
         build-args: |
           CHECKMK_VERSION=${{ env.CHECKMK_VERSION }}
+        platforms: linux/amd64
         push: true
         tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
