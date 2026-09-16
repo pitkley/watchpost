@@ -21,7 +21,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # renovate: datasource=go depName=github.com/rhysd/actionlint
 ACTIONLINT_VERSION="v1.7.12"
 # renovate: datasource=pypi depName=zizmor
-ZIZMOR_VERSION="1.30.0"
+ZIZMOR_VERSION="1.30.1"
 
 go run "github.com/rhysd/actionlint/cmd/actionlint@$ACTIONLINT_VERSION"
 uvx --from "zizmor==$ZIZMOR_VERSION" zizmor --offline .github/workflows
