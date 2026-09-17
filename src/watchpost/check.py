@@ -270,9 +270,11 @@ class Check:
     cache_for: timedelta | None
     """
     Optional time-to-live for caching check results. If set, results are cached
-    for this duration. Without caching, the next poll after result pickup starts
-    another execution. Polls share outstanding work; a check/environment pair
-    never overlaps executions through the application.
+    for this duration. With `None` or zero, the next poll after result pickup
+    starts another execution. The latest result is retained in application memory
+    for display during refresh, without delaying execution or writing to cache
+    storage. Polls share outstanding work; a check/environment pair never
+    overlaps executions through the application.
     """
 
     invocation_information: InvocationInformation | None = None
@@ -652,7 +654,9 @@ def check(
         cache_for:
             Optional cache duration. Accepts a `timedelta` or a string supported
             by `normalize_to_timedelta`. If provided, results are cached for
-            this duration.
+            this duration. `None` or zero disables the freshness interval and
+            storage writes; the latest result remains available in application
+            memory while a new execution runs.
         hostname:
             An optional hostname input or strategy that controls piggyback host
             resolution for results of this check.

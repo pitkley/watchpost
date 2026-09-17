@@ -526,7 +526,8 @@ class Watchpost:
             custom_executor:
                 Optional executor used only for this call.
             use_cache:
-                Whether to use and update the per-check cache.
+                Whether to use and update the per-check cache and in-memory
+                fallback for uncached checks. Set to `False` to bypass both.
 
         Yields:
             `ExecutionResult` objects produced by the check for each environment.

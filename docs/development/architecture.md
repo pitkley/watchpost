@@ -40,6 +40,8 @@ Strategies may depend on current conditions. The synthetic service uses the
 outcomes from that request, rather than calling strategies again or sharing an
 accumulator across requests.
 
+For checks with `cache_for=None` or zero, the runtime retains one latest result list per check/environment pair in memory. This is display fallback state, separate from the freshness cache: it never suppresses execution, never writes to configured cache storage, and is replaced when a completed result is collected. The same per-pair poll lock protects result pickup and fallback publication. `use_cache=False` bypasses fallback reads and writes as well as the cache. Positive cache durations retain their existing expiry policy.
+
 The application retains thin private resolution delegates for existing internal
 callers, including scheduling validation. New resolution logic belongs in the
 planner; execution/cache policy belongs in the runtime. Configure registrations

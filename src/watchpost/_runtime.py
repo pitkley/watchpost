@@ -65,6 +65,9 @@ class _CheckRuntime:
         self.cache = CheckCache(storage=check_cache_storage or InMemoryStorage())
         self._poll_lock = threading.RLock()
         self._poll_locks: dict[tuple[str, str], threading.RLock] = {}
+        # Display fallback only: these results never defer the next execution
+        # and are never written to the configured cache storage.
+        self._uncached_results: dict[tuple[str, str], list[ExecutionResult]] = {}
 
     def shutdown(self, wait: bool = True) -> None:
         if self._owned_executor is not None:
@@ -99,7 +102,8 @@ class _CheckRuntime:
             custom_executor:
                 Optional executor to use instead of the application executor.
             use_cache:
-                Whether to use and update the per-check cache.
+                Whether to use and update the per-check cache and in-memory
+                fallback for uncached checks.
 
         Returns:
             A list of `ExecutionResult` objects, or `None` if the check is not
@@ -121,6 +125,8 @@ class _CheckRuntime:
                 check, environment
             )
 
+        executor_key = (check.identity, environment.name)
+        uncached = not check.cache_for
         if use_cache:
             check_results_cache_entry = self.cache.get_check_results_cache_entry(
                 check=check,
@@ -130,12 +136,23 @@ class _CheckRuntime:
         else:
             check_results_cache_entry = None
 
+        previous_results = (
+            check_results_cache_entry.value if check_results_cache_entry else None
+        )
+        if use_cache and uncached:
+            if executor_key in self._uncached_results:
+                previous_results = self._uncached_results[executor_key]
+            elif previous_results is not None:
+                # A cache left by an earlier configuration can seed the fallback,
+                # but must not replace a newer result collected by this process.
+                self._uncached_results[executor_key] = previous_results
+
         match scheduling_decision:
             case SchedulingDecision.SCHEDULE:
                 # Fall through to the logic below.
                 pass
             case SchedulingDecision.SKIP:
-                if not check_results_cache_entry:
+                if previous_results is None:
                     return check.apply_error_handlers(
                         environment,
                         ExecutionResult(
@@ -148,26 +165,21 @@ class _CheckRuntime:
                             check_definition=check.invocation_information,
                         ),
                     )
-                return check_results_cache_entry.value
+                return previous_results
             case SchedulingDecision.DONT_SCHEDULE:
                 return None
             case _:
                 assert_never(scheduling_decision)  # type: ignore[type-assertion-failure]
 
-        executor_key = (check.identity, environment.name)
-        should_update_cache = (
-            check.cache_for is None
-            or check_results_cache_entry is None
-            or check_results_cache_entry.is_expired()
-        )
         can_reuse_results = (
-            check_results_cache_entry is not None
+            not uncached
+            and check_results_cache_entry is not None
             and not check_results_cache_entry.is_expired()
         )
 
         check_has_errored = True
         try:
-            if should_update_cache or not can_reuse_results:
+            if not can_reuse_results:
                 if datasource_error is not None:
                     raise datasource_error
                 datasources = {
@@ -189,22 +201,16 @@ class _CheckRuntime:
             maybe_execution_results = executor.result(key=executor_key)
             check_has_errored = False
 
-            # If the check is still running asynchronously but we did have a set
-            # of results cached, we do want to fall back to this cache while it
-            # is still available. This ensures that checks that are marked
-            # `cache_for=None` that do have a cached result in a persistent
-            # cache (if used) are not ignored. It also makes sure that any check
-            # that has a `cache_for` specified does not return "check is running
-            # asynchronously" in the short time period where the cache has
-            # expired and the check was just submitted.
-            if not maybe_execution_results and check_results_cache_entry:
-                return check_results_cache_entry.value
+            # Reuse prior output only after checking for a new result. Uncached
+            # checks retain it across refresh polls without gaining a fresh TTL.
+            if not maybe_execution_results and previous_results is not None:
+                return previous_results
         except DatasourceUnavailable as e:
             additional_details = f"\n\n{e!s}\n" + "".join(traceback.format_exception(e))
-            if check_results_cache_entry and check_results_cache_entry.value:
+            if previous_results:
                 return [
                     replace(result, details=(result.details or "") + additional_details)
-                    for result in check_results_cache_entry.value
+                    for result in previous_results
                 ]
 
             maybe_execution_results = check.apply_error_handlers(
@@ -250,12 +256,15 @@ class _CheckRuntime:
             )
 
         if use_cache:
-            self.cache.store_check_results(
-                check=check,
-                environment=environment,
-                results=maybe_execution_results,
-                override_cache_for=timedelta(0) if check_has_errored else None,
-            )
+            if uncached:
+                self._uncached_results[executor_key] = maybe_execution_results
+            else:
+                self.cache.store_check_results(
+                    check=check,
+                    environment=environment,
+                    results=maybe_execution_results,
+                    override_cache_for=timedelta(0) if check_has_errored else None,
+                )
 
         return maybe_execution_results
 
