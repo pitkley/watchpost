@@ -50,9 +50,9 @@ For each check and its declared target environment:
 | `SKIP` | Reuse an available prior result; otherwise return UNKNOWN. |
 | `DONT_SCHEDULE` | Emit no result for that pair from this instance. |
 
-The first HTTP poll commonly returns UNKNOWN because execution has started but
-has not finished. A later poll collects the result. An expired cache entry may
-be returned once while refreshing; stale results are not retained indefinitely.
+The first HTTP poll commonly returns UNKNOWN because execution has started but has not finished. A later poll collects the result. With a positive `cache_for`, an expired cache entry may be returned once while refreshing; stale cache entries are not retained indefinitely.
+
+With `cache_for=None` (or zero), the latest result is retained in application memory while a new execution runs. This fallback does not delay scheduling, is not written to the configured cache storage, and is replaced by the next completed result, including failures. A prior cache entry from an earlier configuration can seed the fallback, but cannot delay pickup of a new result. Newly collected uncached results do not survive application restarts. `run_check(..., use_cache=False)` bypasses both the cache and this fallback. If a check never finishes, the previous result remains visible; configure timeouts on external I/O.
 
 Both cached and uncached checks have at most one outstanding execution per
 check/environment pair through the application API. Once a completed uncached
