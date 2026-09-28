@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  CHECKMK_VERSION: "2.4.0p36"
+  CHECKMK_VERSION: "2.4.0p37"
 
 jobs:
   cmk-docker-build:
