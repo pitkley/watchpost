@@ -376,7 +376,7 @@ Find a list of packages below
 ### mkdocstrings-1.0.6
 
 - HomePage:
-- Author: =?utf-8?q?Timoth=C3=A9e_Mazzucotelli?=
+- Author: Timothée Mazzucotelli
 - License: ISC
 - Compatible: True
 
