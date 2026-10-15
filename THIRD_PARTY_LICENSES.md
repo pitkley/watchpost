@@ -254,7 +254,7 @@ Find a list of packages below
 - License: BSD License
 - Compatible: True
 
-### lefthook-2.1.12
+### lefthook-2.2.2
 
 - HomePage:
 - Author: Evil Martians
