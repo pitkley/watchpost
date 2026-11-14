@@ -254,7 +254,7 @@ Find a list of packages below
 - License: BSD License
 - Compatible: True
 
-### lefthook-2.1.12
+### lefthook-2.2.2
 
 - HomePage:
 - Author: Evil Martians
@@ -383,7 +383,7 @@ Find a list of packages below
 ### mkdocstrings-python-2.0.8
 
 - HomePage:
-- Author: =?utf-8?q?Timoth=C3=A9e_Mazzucotelli?=
+- Author: Timothée Mazzucotelli
 - License: ISC
 - Compatible: True
 
